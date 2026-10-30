@@ -171,6 +171,25 @@ void FScene::RemoveAllLights()
 	SkyLightEnvironments.clear();
 }
 
+void FScene::AddDecal(UDecalComponent* Component)
+{
+	if (Component == nullptr) return;
+	if (Decals.Find(Component) != INDEX_NONE) return;
+
+	Decals.Push(Component);
+}
+
+void FScene::RemoveDecal(UDecalComponent* Component)
+{
+	const int32 idx = Decals.Find(Component);
+	if (idx != INDEX_NONE) Decals.RemoveAtSwap(idx);
+}
+
+void FScene::RemoveAllDecals()
+{
+	Decals.Reset();
+}
+
 FAmbientLightRenderData FScene::GetSkyAmbientLight(bool bGameView) const
 {
 	for (const USkyLightComponent* Sky : SkyLights)

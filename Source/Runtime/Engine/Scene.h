@@ -6,6 +6,7 @@
 #include "Components/PrimitiveComponent.h"
 #include "Components/LightComponent.h"
 #include "Components/SkyLightComponent.h"
+#include "Components/DecalComponent.h"
 #include "Math/Frustum.h"
 #include "Math/BVH.h"
 #include "Render/Renderer.h"
@@ -24,8 +25,11 @@ public:
 
 	void AddLight(ULightComponent* Component);
 	void RemoveLight(ULightComponent* Component);
-
 	void RemoveAllLights();
+
+	void AddDecal(UDecalComponent* Component);
+	void RemoveDecal(UDecalComponent* Component);
+	void RemoveAllDecals();
 
 	const class FAmbientLightSceneProxy* GetActiveAmbientLight(bool bGameView) const { return nullptr; }
 	FAmbientLightRenderData GetSkyAmbientLight(bool bGameView) const;
@@ -71,6 +75,8 @@ public:
 	TArray<FLocalLightSceneProxy*>        LocalLightProxies;      // ↔ PackedIndex ↔
 	TArray<FDirectionalLightSceneProxy*>  DirectionalLightProxies;
 	TArray<USkyLightComponent*>           SkyLights;               // 프록시 없음
+
+	TArray<UDecalComponent*>			  Decals;
 
 private:
 	void RecordShadowInvalidation(const FAABB& Bounds);
