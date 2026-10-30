@@ -610,7 +610,33 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			Renderer->DrawMeshes(ForwardBatches);
 			UnbindForwardLighting(Renderer);
 		})) return false;
+
+		{
+			FRenderGraphRasterPassDesc Decal{};
+			Decal.Name = "Decal";
+			Decal.ColorAttachments = { { LightingHDR, ERenderGraphLoadAction::Load,{ 0.0f, 0.0f, 0.0f, 1.0f } } };
+			Decal.DepthAttachment = { Depth, ERenderGraphLoadAction::Load, 1.0f, 0 };
+			Decal.ReadTextures = {};
+			Decal.Viewport = {};
+			if (!Graph.AddRasterPass(std::move(Decal), [this, Renderer]
+				{
+					if (!bCorePassSucceeded || ForwardBatches.IsEmpty()) return;
+
+					FPipelineState* DecalPipeline = FRenderResourceManager::GetPSO(EPSOType::Decal);
+					if (!DecalPipeline || !DecalPipeline->Shader) return;
+
+					// 실제 메시 패스와 같은 VS를 사용해 깊이 계산을 일치시킨다.
+					TArray<FMeshDrawBatch> DecalBatches = ForwardBatches;
+					for (FMeshDrawBatch& Batch : DecalBatches)
+					{
+						Batch.Pipeline = * DecalPipeline;
+					}
+					Renderer->DrawMeshes(DecalBatches);
+				})) return false;
+		}
 	}
+
+	
 
 	FRenderGraphRasterPassDesc ToneMap{};
 	ToneMap.Name = "ToneMap";
