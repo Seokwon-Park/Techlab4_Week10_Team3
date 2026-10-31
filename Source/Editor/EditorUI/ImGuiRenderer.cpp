@@ -222,7 +222,7 @@ bool FImGuiRenderer::Init(HWND WindowHandle, ID3D11Device* Device, ID3D11DeviceC
 	IMGUI_CHECKVERSION();
 	ImGui::CreateContext();
 
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
+	ImGuiIO& io = ImGui::GetIO();
 	io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
 	io.ConfigFlags |= ImGuiConfigFlags_DockingEnable;
 	io.ConfigFlags |= ImGuiConfigFlags_ViewportsEnable;
@@ -294,14 +294,10 @@ void FImGuiRenderer::Begin()
 	ImGui_ImplWin32_NewFrame();
 
 	ImGui::NewFrame();
-
-	ImGuiIO& io = ImGui::GetIO(); (void)io;
 }
 
 void FImGuiRenderer::End()
 {
-	ImGuiIO& io = ImGui::GetIO();
-
 	ImGui::Render();
 	ImGui_ImplDX11_RenderDrawData(ImGui::GetDrawData());
 
