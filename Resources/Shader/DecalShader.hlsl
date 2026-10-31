@@ -23,14 +23,26 @@ struct VS_IN
     float4 Color : COLOR;
 };
 
-float4 mainVS(VS_IN Input) : SV_POSITION
+struct VS_OUT
 {
+    float4 Position : SV_Position;
+    float3 WorldPosition : TEXCOORD;
+};
+
+VS_OUT mainVS(VS_IN Input) 
+{
+    VS_OUT OUTPUT;
     float4 WorldPosition = mul(float4(Input.Position, 1.0f), World);
     float4 ViewPosition = mul(WorldPosition, View);
-    return mul(ViewPosition, Projection);
+    
+    OUTPUT.Position = mul(ViewPosition, Projection);
+    OUTPUT.WorldPosition = WorldPosition.xyz;
+    return OUTPUT;
 }
 
-float4 mainPS() : SV_Target
+float4 mainPS(VS_OUT Input) : SV_Target
 {
-    return float4(DecalWorld._11, DecalWorld._11, DecalWorld._11, 1.0);     // 상수버퍼 제대로 넘어갔나 실험용!
+    float4 DecalClip = mul(float4(Input.WorldPosition, 1), DecalVP);
+    
+    return float4(DecalClip.x*0.5+0.5, DecalClip.y*0.5+0.5  , 0, 1); // 상수버퍼 제대로 넘어갔나 실험용!
 }

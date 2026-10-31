@@ -623,10 +623,6 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				{
 					if (!bCorePassSucceeded || ForwardBatches.IsEmpty()) return;
 
-					FDecalData Data{};
-					Data.W[0][0] = 0.5f;
-					Data.VP[0][0] = 0.5f;
-
 					FPipelineState* DecalPipeline = FRenderResourceManager::GetPSO(EPSOType::Decal);
 					if (!DecalPipeline || !DecalPipeline->Shader) return;
 
@@ -634,12 +630,21 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					TArray<FMeshDrawBatch> DecalBatches = ForwardBatches;
 					for (FMeshDrawBatch& Batch : DecalBatches)
 					{
-						Batch.Pipeline = * DecalPipeline;
+						Batch.Pipeline = *DecalPipeline;
 					}
 
-					RenderCommand::UpdateBufferData(Constants, &Data, sizeof(Data));
-					RenderCommand::BindConstantBuffer(1, Constants, EShaderBindFlagBits::Pixel);
-					Renderer->DrawMeshes(DecalBatches);
+					FDecalData Data{};
+
+					const FScene& Scene = World->GetScene();
+					for (auto Decal : Scene.Decals) {
+						Decal->SetDecalViewProj();
+						Data.VP = Decal->GetDecalVP();
+
+						RenderCommand::UpdateBufferData(Constants, &Data, sizeof(Data));
+						RenderCommand::BindConstantBuffer(1, Constants, EShaderBindFlagBits::Pixel);
+
+						Renderer->DrawMeshes(DecalBatches);
+					}
 				})) return false;
 		}
 	}

@@ -17,6 +17,9 @@ public:
 	int32 GetSortOrder() const { return SortOrder; }
 	void SetSortOrder(int32 InSortOrder) { SortOrder = InSortOrder; }
 
+	void SetDecalViewProj();
+	FMatrix GetDecalVP() { return DecalViewProj; }
+
 
 protected:
 	virtual bool ShouldCreateRenderState() const override
@@ -31,5 +34,7 @@ private:
 	UPROPERTY(EditAnywhere) UTexture2D* DecalTexture = nullptr;
 	UPROPERTY(EditAnywhere) FVector Extent = FVector(50, 50, 50);
 	UPROPERTY(EditAnywhere) int32 SortOrder = 0;
+
+	FMatrix DecalViewProj;
 
 };
