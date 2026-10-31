@@ -9,7 +9,7 @@ struct FBoneInfo
 {
 	FString Name;
 	int32 ParentIndex = -1; // 부모가 항상 앞 인덱스
-	FTransform LocalBindPose; // 부모기준?
+	FTransform LocalBindPose; // 부모기준 위치
 	FMatrix InverseBindPose; //컴포넌트 공간 바인드 역행렬
 };
 
@@ -22,7 +22,7 @@ struct FSkinWeight
 struct FSkeletalMeshData
 {
 	TArray<FVertex> BindVertices;
-	TArray<FSkinWeight> SkinWeight;
+	TArray<FSkinWeight> SkinWeight; // BindVertices의 크기와 동일(어떤 정점이 어떤 Bone의 영향을 받는지, 얼마나 영향을 받는지)
 	TArray<uint32> Indices;
 	TArray<FStaticMeshSection> Sections;
 	TArray<FStaticMaterialSlot> MaterialSlots;

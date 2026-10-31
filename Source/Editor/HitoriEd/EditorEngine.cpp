@@ -327,8 +327,6 @@ bool UEditorEngine::Init()
 		[this](EPlayModeType Mode) { PlayMode = Mode; },
 		[this]() { return !IsPlaying(); });
 
-	FLuaScriptManager::Get().GetState().script("print('hello', 1 + 2, nil)");
-
 	return true;
 }
 

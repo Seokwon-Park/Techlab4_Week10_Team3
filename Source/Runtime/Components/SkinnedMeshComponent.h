@@ -30,7 +30,7 @@ public:
 
 	virtual bool LineTraceComponentLocal(const FRay& LocalRay, float& Out) override;
 
-	void MarkBoneTransformDirty() { bBoneTransformsDirty = true; }
+	void MarkBoneTransformsDirty() { bBoneTransformsDirty = true; }
 	void UpdateBoneTransformsNow();
 
 	const TArray<FMatrix>& GetComponentSpaceTransform() const { return ComponentSpaceTransforms; }
