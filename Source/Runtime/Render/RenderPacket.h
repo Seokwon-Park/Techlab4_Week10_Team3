@@ -15,7 +15,11 @@ struct FRenderPacket
 {
 	const FPrimitiveSceneProxy* Proxy = nullptr;
 	const FMatrix* Model = nullptr;
-	UStaticMesh* Mesh = nullptr;
+
+	UStaticMesh* Mesh = nullptr; // static
+	FVertexBuffer* VertexBuffer = nullptr; // dynamic
+	FIndexBuffer* IndexBuffer= nullptr; // dynamic
+
 	UMaterial* Material = nullptr;
 	const void* MaterialParamData = nullptr;
 	float CameraToParticleDistance = 0.0f;
@@ -105,8 +109,9 @@ class FRenderQueue : public TArray<FRenderPacket>
 			return (1ull << 63) | (~DistanceBits & 0xFFFFFFFFull);
 		}
 
+		const uint64 MeshKey = Packet.Mesh ? Packet.Mesh->SortID : 0xFFFFu;
 		return (static_cast<uint64>(Packet.Material->SortID) << 47)
-			| (static_cast<uint64>(Packet.Mesh->SortID) << 31)
+			| (static_cast<uint64>(MeshKey) << 31)
 			| (static_cast<uint64>(Packet.LODIndex & 0x3) << 29);
 	}
 
@@ -161,7 +166,7 @@ public:
 		for (int32 Index = 0; Index < TotalPackets; ++Index)
 		{
 			const FRenderPacket& Packet = (*this)[Index];
-			if (!Packet.Mesh || !Packet.Material) continue;
+			if ((!Packet.Mesh && (!Packet.VertexBuffer || !Packet.IndexBuffer)) || !Packet.Material) continue;
 			SortItems.Add({ MakeSortKey(Packet), Index });
 		}
 

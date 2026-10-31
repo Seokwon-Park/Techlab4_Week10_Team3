@@ -1053,7 +1053,7 @@ void FSceneRenderer::GatherRenderPackets(FScene& Scene, FSceneRenderData& Data,
 				}
 				else
 				{
-					Primitive->SubmitToRenderQueue(RenderQueue, View);
+					Proxy->GetDynamicMeshElements(RenderQueue, View); 
 				}
 
 				// continue 없이 항상 여기까지 와서 새 패킷에 여유 칸을 배정한다.

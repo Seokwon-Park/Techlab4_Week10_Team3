@@ -44,6 +44,8 @@ public:
 	void MarkDirty(FPrimitiveSceneProxy* Proxy);
 	void MarkRenderStateDirty(FPrimitiveSceneProxy* Proxy);
 
+	void InvalidateShadowsInBounds(const FAABB& Bounds) { RecordShadowInvalidation(Bounds); }
+
 	// 그림자 캐시 무효화 기록. 뷰마다 처리한 Version이 다르므로 지우지 않고 쌓다가 한도를 넘으면 오래된 절반을 버린다.
 	FShadowInvalidationList GetShadowInvalidations() const
 	{

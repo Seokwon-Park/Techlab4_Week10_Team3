@@ -30,6 +30,19 @@ void FPrimitiveSceneProxy::OnMeshDestroyed()
     RenderState.reset();
 }
 
+void FPrimitiveSceneProxy::UpdateCommonFlags()
+{
+    bVisible = Component->IsShown(false);
+    bHiddenInGame = !Component->IsShown(true);
+    bCastsShadow = Component->bCastShadow;
+    bReceiveShadow = Component->bReceiveShadow;
+}
+
+void FPrimitiveSceneProxy::GetDynamicMeshElements(FRenderQueue& Queue, const FViewContext& View)
+{
+    Component->SubmitToRenderQueue(Queue,View);
+}
+
 void FPrimitiveSceneProxy::UpdateTransform()
 {
     LocalToWorld = Component->GetWorldMatrix();
@@ -44,10 +57,7 @@ void FPrimitiveSceneProxy::UpdateRenderState()
     UStaticMesh* PreviousMesh = Mesh;
     Mesh = nullptr;
     RenderState.reset();
-    bVisible = Component->IsShown(false);
-    bHiddenInGame = !Component->IsShown(true);
-    bCastsShadow = Component->bCastShadow;
-    bReceiveShadow = Component->bReceiveShadow;
+    UpdateCommonFlags();
     UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component);
     if (StaticMeshComponent) Mesh = StaticMeshComponent->GetStaticMesh();
     if (Mesh != PreviousMesh)
