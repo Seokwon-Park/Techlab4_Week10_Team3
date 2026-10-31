@@ -10,6 +10,8 @@
 #include "Render/RenderResourceManager.h"
 
 #include "Asset/ObjImporter/ObjImporter.h"
+#include "Asset/FbxImporter/FbxMeshBake.h"
+#include "Render/SkeletalMesh.h"
 
 #include "Render/GeometryGenerator.h"
 #include "UObject/UObjectGlobals.h"
@@ -155,6 +157,13 @@ void UAssetManager::LoadAsset(const FString& Key, const FString& Path) {
 	}
 	if (Extension == ".obj") {
 		LoadObjStaticMesh(Path);
+	}
+	// FBX Asset은 엔진 시작 시 원본 .fbx 대신 Import로 저장한 .fbx.bin만 로드한다.
+	// 원본 해석과 변경 여부 비교는 FFbxImporter::ImportToAssets에서만 수행하며,
+	// 이 로드 경로는 원본 파일이나 FBX SDK 없이 저장된 데이터로 렌더 자원을 만든다.
+	if (Extension == ".bin" && FFbxMeshBake::IsBakedPath(Path)) {
+		FString Error;
+		if (!LoadFbxMesh(Path, Error)) HTR_LOG(Error, "{}", Error);
 	}
 }
 
@@ -408,6 +417,30 @@ UStaticMesh* UAssetManager::LoadObjStaticMesh(const FString& Path)
 
 	Get().RegisterAsset(Key, Mesh);
 	return Mesh;
+}
+
+URenderAsset* UAssetManager::LoadFbxMesh(const FString& Path, FString& OutError)
+{
+	OutError.clear();
+	const FString Key = MakeAssetKey(Path);
+	if (auto* Cached = GetAssetByPath<URenderAsset>(Key)) return Cached;
+	FFbxBakedMesh Data;
+	if (!FFbxMeshBake::IsBakedPath(Path) || !FFbxMeshBake::Read(Path, Data, OutError))
+	{
+		if (OutError.empty()) OutError = "FBX binary: expected .fbx.bin: " + Path;
+		return nullptr;
+	}
+	URenderAsset* Asset = nullptr;
+	if (Data.Kind == EFbxMeshKind::Static) Asset = CreateStaticMesh(&Data.StaticMesh);
+	else
+	{
+		auto* Mesh = NewObject<USkeletalMesh>();
+		if (!Mesh->Build(std::move(Data.SkeletalMesh), OutError)) return nullptr;
+		Asset = Mesh;
+	}
+	if (!Asset) { OutError = "FBX binary: mesh resource creation failed: " + Path; return nullptr; }
+	Get().RegisterAsset(Key, Asset);
+	return Asset;
 }
 
 bool UAssetManager::ReorientStaticMesh(UStaticMesh& Mesh, const std::function<FVector(const FVector&)>& Rotate)

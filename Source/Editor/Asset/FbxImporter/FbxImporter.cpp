@@ -1,5 +1,6 @@
 #include "EnginePCH.h"
 #include "FbxImporter.h"
+#include "Asset/AssetManager.h"
 
 #include <array>
 
@@ -723,4 +724,247 @@ bool FFbxImporter::BuildSkeletalMesh(FSkeletalMeshData& OutData, TArray<FString>
 	if (!Result.Validate(OutError)) return false;
 	OutData = std::move(Result);
 	return true;
+}
+
+namespace
+{
+	FString Utf8Path(const std::filesystem::path& Path)
+	{
+		const auto Text = Path.generic_u8string();
+		return FString(Text.begin(), Text.end());
+	}
+
+	FString AssetFileName(const std::filesystem::path& Path)
+	{
+		FString Name;
+		for (char C : Utf8Path(Path.stem()))
+		{
+			if ((C >= 'a' && C <= 'z') || (C >= 'A' && C <= 'Z') || (C >= '0' && C <= '9') || C == '-' || C == '_') Name += C;
+			else if (Name.empty() || Name.back() != '_') Name += '_';
+		}
+		if (Name.empty() || Name == "_") Name = "FBX";
+		FString Upper = Name;
+		for (char& C : Upper) if (C >= 'a' && C <= 'z') C -= 'a' - 'A';
+		if (Upper == "CON" || Upper == "PRN" || Upper == "AUX" || Upper == "NUL" || (Upper.size() == 4 && (Upper.starts_with("COM") || Upper.starts_with("LPT")) && Upper[3] >= '1' && Upper[3] <= '9')) Name = "_" + Name;
+		return Name;
+	}
+
+	bool SameSource(const FFbxSourceInfo& A, const FFbxSourceInfo& B)
+	{
+		return A.Path == B.Path && A.Size == B.Size && A.ModifiedTime == B.ModifiedTime && A.Mode == B.Mode;
+	}
+
+	// 새로 만든 작업 폴더만 정리한다. 복구에 실패하면 백업을 보존한다.
+	struct FImportFiles
+	{
+		std::filesystem::path Folder;
+		TArray<std::pair<std::filesystem::path, std::filesystem::path>> Files;
+		bool bKeepBackup = false;
+		~FImportFiles()
+		{
+			if (!Folder.empty() && !bKeepBackup) { std::error_code EC; std::filesystem::remove_all(Folder, EC); }
+		}
+		bool Commit(FString& Error)
+		{
+			// 모든 기존 파일을 먼저 보관한 뒤 개별 교체한다. 여러 파일 전체의 원자성은 보장하지 않는다.
+			TArray<uint8> Existing;
+			for (int32 I = 0; I < Files.Num(); ++I)
+			{
+				const auto& Target = Files[I].second;
+				const bool Exists = std::filesystem::exists(Target);
+				Existing.Add(Exists);
+				if (Exists) std::filesystem::copy_file(Target, Folder / ("backup_" + std::to_string(I)));
+			}
+			for (int32 I = 0; I < Files.Num(); ++I)
+			{
+				if (MoveFileExW(Files[I].first.c_str(), Files[I].second.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) continue;
+				Error = "FBX: cannot replace file: " + Utf8Path(Files[I].second) + " (Windows " + std::to_string(GetLastError()) + ")";
+				for (int32 J = I - 1; J >= 0; --J)
+				{
+					if (Existing[J])
+					{
+						const auto Backup = Folder / ("backup_" + std::to_string(J));
+						if (!MoveFileExW(Backup.c_str(), Files[J].second.c_str(), MOVEFILE_REPLACE_EXISTING | MOVEFILE_WRITE_THROUGH)) bKeepBackup = true;
+					}
+					else { std::error_code EC; std::filesystem::remove(Files[J].second, EC); if (EC) bKeepBackup = true; }
+				}
+				if (bKeepBackup) Error += "; rollback incomplete; backups kept at " + Utf8Path(Folder);
+				return false;
+			}
+			return true;
+		}
+	};
+
+	bool RegisterImported(const TArray<FString>& Paths, bool bChanged, TArray<FString>& Warnings, FString& Error)
+	{
+		for (const auto& Path : Paths)
+		{
+			const FString Key = std::filesystem::relative(PathOf(Path), "Assets").generic_string();
+			if (bChanged && UAssetManager::GetAssetByPath<URenderAsset>(Key))
+			{
+				// TODO: 실행 중 로드된 Asset과 참조 중인 Material/Texture의 안전한 교체.
+				Warnings.Add("FBX: asset already loaded; restart the engine to use updated files: " + Key);
+			}
+			if (!UAssetManager::LoadFbxMesh(Path, Error))
+			{
+				Error = "FBX files are available, but asset registration failed: " + Error;
+				return false;
+			}
+		}
+		return true;
+	}
+}
+
+bool FFbxImporter::ImportToAssets(const FString& Path, EFbxImportMode Mode, FFbxImportResult& OutResult, FString& OutError)
+{
+	OutResult = {};
+	OutError.clear();
+	struct FWarningLog
+	{
+		const TArray<FString>& Warnings;
+		~FWarningLog() { for (const auto& Warning : Warnings) HTR_LOG(Warning, "{}", Warning); }
+	} WarningLog{ OutResult.Warnings };
+	if (Mode != EFbxImportMode::Static && Mode != EFbxImportMode::Skeletal) { OutError = "FBX: invalid Import mode"; return false; }
+	try
+	{
+		const auto SourcePath = std::filesystem::canonical(PathOf(Path));
+		FFbxSourceInfo Source;
+		Source.Path = Utf8Path(SourcePath);
+		Source.Size = std::filesystem::file_size(SourcePath);
+		Source.ModifiedTime = std::filesystem::last_write_time(SourcePath).time_since_epoch().count();
+		Source.Mode = Mode;
+		FString Name = AssetFileName(SourcePath);
+		const FString Stem = Utf8Path(SourcePath.stem());
+		if (std::none_of(Stem.begin(), Stem.end(), [](char C)
+		{
+			return (C >= 'a' && C <= 'z') || (C >= 'A' && C <= 'Z') || (C >= '0' && C <= '9');
+		}))
+		{
+			// 영숫자가 남지 않는 출력 이름은 정규화 원본 경로의 FNV-1a 32bit로 구분한다.
+			// UTF-8 바이트와 고정 상수를 사용하여 실행이나 빌드가 달라도 같은 이름을 만든다.
+			constexpr uint32 OffsetBasis = 2166136261u;
+			constexpr uint32 Prime = 16777619u;
+			uint32 Hash = OffsetBasis;
+			for (unsigned char Byte : Source.Path) Hash = (Hash ^ Byte) * Prime;
+			Name = "FBX_";
+			for (int Shift = 28; Shift >= 0; Shift -= 4) Name += "0123456789abcdef"[(Hash >> Shift) & 0xf];
+		}
+		const auto Folder = std::filesystem::path("Assets/FBX") / Name;
+		const auto StaticPath = Folder / (Name + "_Static.fbx.bin");
+		const auto SkeletalPath = Folder / (Name + ".fbx.bin");
+		const auto Primary = Mode == EFbxImportMode::Static ? StaticPath : SkeletalPath;
+		FFbxBakedMesh Previous;
+		FString ReadError;
+		if (FFbxMeshBake::Read(Utf8Path(Primary), Previous, ReadError) && SameSource(Source, Previous.Source)
+			&& Previous.Kind == (Mode == EFbxImportMode::Static ? EFbxMeshKind::Static : EFbxMeshKind::Skeletal))
+		{
+			bool Complete = Mode != EFbxImportMode::Static || Previous.Source.Outputs == static_cast<uint32>(EFbxMeshKind::Static);
+			TArray<FString> Paths;
+			for (EFbxMeshKind Kind : { EFbxMeshKind::Static, EFbxMeshKind::Skeletal })
+			{
+				if (!(Previous.Source.Outputs & static_cast<uint32>(Kind))) continue;
+				const FString OutputPath = Utf8Path(Kind == EFbxMeshKind::Static ? StaticPath : SkeletalPath);
+				FFbxBakedMesh Other;
+				if (!FFbxMeshBake::Read(OutputPath, Other, ReadError) || !SameSource(Source, Other.Source) || Other.Source.Outputs != Previous.Source.Outputs || Other.Kind != Kind) Complete = false;
+				Paths.Add(OutputPath);
+			}
+			if (Complete)
+			{
+				// TODO: 원본 FBX가 같고 외부 Texture만 변경된 경우도 감지한다.
+				OutResult.bSkipped = true;
+				OutResult.Paths = std::move(Paths);
+				HTR_LOG(Info, "FBX Import skipped (source unchanged): {}", Source.Path);
+				return RegisterImported(OutResult.Paths, false, OutResult.Warnings, OutError);
+			}
+		}
+
+		FFbxImporter Importer;
+		if (!Importer.Open(Source.Path, OutError)) return false;
+		TArray<FString> Warnings;
+		if (!Importer.ReadMeshData(Warnings, OutError)) { OutResult.Warnings.Append(Warnings); return false; }
+		OutResult.Warnings.Append(Warnings);
+		TArray<FFbxBakedMesh> Outputs;
+		if (Mode == EFbxImportMode::Skeletal)
+		{
+			if (!Importer.ReadSkeletonData(Warnings, OutError)) { OutResult.Warnings.Append(Warnings); return false; }
+			OutResult.Warnings.Append(Warnings);
+			FFbxBakedMesh Skeletal;
+			Skeletal.Kind = EFbxMeshKind::Skeletal;
+			if (!Importer.BuildSkeletalMesh(Skeletal.SkeletalMesh, Warnings, OutError)) { OutResult.Warnings.Append(Warnings); return false; }
+			OutResult.Warnings.Append(Warnings);
+			Outputs.Add(std::move(Skeletal));
+		}
+		FFbxBakedMesh Static;
+		if (Mode == EFbxImportMode::Static) Importer.BuildStaticMesh(Static.StaticMesh);
+		else for (const auto& Mesh : Importer.GetMeshNodes()) if (!Mesh.bHasSkin && Mesh.RigidBoneIndex < 0) AppendGeometry(Mesh.Geometry, Static.StaticMesh);
+		if (!Static.StaticMesh.Vertices.IsEmpty())
+		{
+			if (!Static.StaticMesh.Validate(OutError)) return false;
+			Outputs.Add(std::move(Static));
+		}
+		Importer.Close();
+		if (Outputs.IsEmpty()) { OutError = "FBX: no mesh output"; return false; }
+		for (const auto& Output : Outputs) Source.Outputs |= static_cast<uint32>(Output.Kind);
+		std::filesystem::create_directories(Folder / "Textures");
+		FImportFiles Staged;
+		const auto Temporary = Folder / (".import-" + std::to_string(GetCurrentProcessId()) + "-" + std::to_string(GetTickCount64()));
+		if (!std::filesystem::create_directory(Temporary)) { OutError = "FBX: temporary directory already exists"; return false; }
+		Staged.Folder = Temporary;
+		TMap<FString, FString> Copied;
+		TSet<FString> Names;
+		for (auto& Output : Outputs)
+		{
+			Output.Source = Source;
+			auto& Slots = Output.Kind == EFbxMeshKind::Static ? Output.StaticMesh.MaterialSlots : Output.SkeletalMesh.MaterialSlots;
+			for (auto& Slot : Slots) for (FString* Texture : { &Slot.DiffuseTexturePath, &Slot.NormalTexturePath })
+			{
+				if (Texture->empty()) continue;
+				const auto Original = std::filesystem::canonical(PathOf(*Texture));
+				const FString OriginalKey = Utf8Path(Original);
+				if (const auto* Existing = Copied.Find(OriginalKey)) { *Texture = *Existing; continue; }
+				FString Extension = Original.extension().string();
+				for (char& C : Extension) if (C >= 'A' && C <= 'Z') C += 'a' - 'A';
+				if (!std::all_of(Extension.begin(), Extension.end(), [](unsigned char C)
+				{
+					return C == '.' || (C >= 'a' && C <= 'z') || (C >= '0' && C <= '9');
+				})) Extension = ".texture";
+				const FString Base = AssetFileName(Original);
+				FString File = Base + Extension;
+				int Suffix = 1;
+				auto Lower = [](FString Text)
+				{
+					for (char& C : Text) if (C >= 'A' && C <= 'Z') C += 'a' - 'A';
+					return Text;
+				};
+				while (Names.Contains(Lower(File))) File = Base + "_" + std::to_string(Suffix++) + Extension;
+				Names.Add(Lower(File));
+				const auto Target = Folder / "Textures" / File;
+				const auto Temp = Staged.Folder / ("texture_" + std::to_string(Copied.Num()));
+				std::filesystem::copy_file(Original, Temp);
+				Staged.Files.Add({ Temp, Target });
+				*Texture = Utf8Path(Target);
+				Copied.Add(OriginalKey, *Texture);
+			}
+		}
+		TArray<FString> Paths;
+		for (const auto& Output : Outputs)
+		{
+			const auto Target = Output.Kind == EFbxMeshKind::Static ? StaticPath : SkeletalPath;
+			// 작업 폴더가 남아도 Asset 검색에서 완성된 FBX Binary로 인식하지 않게 한다.
+			const auto Temp = Staged.Folder / (Output.Kind == EFbxMeshKind::Static ? "static.tmp" : "skeletal.tmp");
+			if (!FFbxMeshBake::Write(Utf8Path(Temp), Output, OutError)) return false;
+			Staged.Files.Add({ Temp, Target });
+			Paths.Add(Utf8Path(Target));
+		}
+		if (Source.Size != std::filesystem::file_size(SourcePath) || Source.ModifiedTime != std::filesystem::last_write_time(SourcePath).time_since_epoch().count()) { OutError = "FBX: source changed during Import; retry"; return false; }
+		if (!Staged.Commit(OutError)) return false;
+		OutResult.Paths = std::move(Paths);
+		HTR_LOG(Info, "FBX Import saved: {} ({} files)", Source.Path, OutResult.Paths.Num());
+		return RegisterImported(OutResult.Paths, true, OutResult.Warnings, OutError);
+	}
+	catch (const std::filesystem::filesystem_error& E)
+	{
+		OutError = "FBX: file operation failed: " + FString(E.what());
+		return false;
+	}
 }
