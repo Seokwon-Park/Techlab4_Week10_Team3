@@ -31,7 +31,7 @@ public:
 		return Result;
 	}
 
-	void Tick(float DeltaTime) override;
+	void Tick(float DeltaTime);
 
 	void OnRender(bool bActive) override;
 

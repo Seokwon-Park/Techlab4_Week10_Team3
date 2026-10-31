@@ -9,7 +9,10 @@ class FEditorTabContainer
 public:
 	void AddTab(IEditorTab* Tab);
 
-	void Tick(float DeltaTime);
+	void RemoveTab(IEditorTab* Tab);
+	void ActivateTab(IEditorTab* Tab);
+	void RequestCloseTab(IEditorTab* Tab);
+	void ProcessCloseRequests();
 
 	IEditorTab* GetMainSelectedTab() const { return MainSelectedTab; }
 	IEditorTab* GetFocusedTab() const { return FocusedTab; }
@@ -24,6 +27,9 @@ private:
 	static void DrawTabMenu(IEditorTab& Tab);
 
 	TArray<IEditorTab*> Tabs;
+	TArray<IEditorTab*> PendingCloseTabs;
+	IEditorTab* PendingActivation = nullptr;
+	bool bRendering = false;
 	IEditorTab* MainSelectedTab = nullptr;
 	IEditorTab* FocusedTab = nullptr;
 };

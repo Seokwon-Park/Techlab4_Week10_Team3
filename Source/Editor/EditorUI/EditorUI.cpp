@@ -19,7 +19,7 @@ bool FEditorUI::Init(bool bInUseDockSpace, bool bInPassthruCentralNode)
 
 void FEditorUI::Tick(float DeltaTime)
 {
-	TabContainer.Tick(DeltaTime);
+	LevelEditorTab.Tick(DeltaTime);
 }
 
 void FEditorUI::OnRender()
@@ -51,6 +51,7 @@ void FEditorUI::OnRender()
 	TabContainer.OnRender();
 	DrawMainMenuBar();
 	ImGui::End();
+	TabContainer.ProcessCloseRequests();
 }
 
 // 메인 도킹 영역에서 선택된 탭의 메뉴를 공통 상단에 표시한다.

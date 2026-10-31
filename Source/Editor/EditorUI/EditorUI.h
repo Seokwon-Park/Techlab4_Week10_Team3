@@ -15,6 +15,9 @@ public:
 
 	// 같은 애셋의 중복 생성 여부와 탭의 수명은 호출자가 관리한다.
 	void AddEditorTab(IEditorTab* Tab) { TabContainer.AddTab(Tab); }
+	void RemoveEditorTab(IEditorTab* Tab) { TabContainer.RemoveTab(Tab); }
+	void ActivateEditorTab(IEditorTab* Tab) { TabContainer.ActivateTab(Tab); }
+	void RequestCloseEditorTab(IEditorTab* Tab) { TabContainer.RequestCloseTab(Tab); }
 
 	IEditorTab* GetMainSelectedTab() const { return TabContainer.GetMainSelectedTab(); }
 	IEditorTab* GetFocusedTab() const { return TabContainer.GetFocusedTab(); }

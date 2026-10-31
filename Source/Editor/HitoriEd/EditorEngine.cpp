@@ -99,6 +99,7 @@ bool UEditorEngine::Init()
 
 	EditorUI = MakeUnique<FEditorUI>();
 	EditorUI->Init();
+	EditorManager = MakeUnique<FEditorManager>(*EditorUI);
 
 	EditorUI->OnNewScene.AddDynamic(this, &UEditorEngine::CreateNewScene);
 	EditorUI->OnOpenScene.AddDynamic(this, &UEditorEngine::OpenScene);
@@ -368,7 +369,9 @@ void UEditorEngine::Tick(const float DeltaTime)
 		AudioDevice->Update(!bIsPaused);
 	}
 	RenderViewports();
+	EditorManager->Render();
 	EndFrame();
+	EditorManager->ProcessPendingRequests();
 }
 
 void UEditorEngine::PreLoadMap(FWorldContext& Context)
@@ -554,6 +557,7 @@ void UEditorEngine::TickWorldAndEditor(const float DeltaTime)
 	{
 		SCOPE_CYCLE_COUNTER(STAT_EditorTick);
 		EditorUI->Tick(DeltaTime);
+		EditorManager->Tick(DeltaTime);
 	}
 	UpdateGizmoAndPicking();
 	EditorWorld->GetScene().UpdateAllTransforms();
@@ -1248,6 +1252,10 @@ void UEditorEngine::DrawPIEWindows()
 // ImGui를 정리한다. UObject 일괄 삭제와 공용 자원·Device 정리는 FEngineLoop가 이어서 한다.
 void UEditorEngine::PreExit()
 {
+	if (EditorManager)
+	{
+		EditorManager->Shutdown();
+	}
 	EndPlayMap();
 	// 시퀀서는 에디터 월드 액터를 가리키므로 월드보다 먼저 정리한다
 	if (SequencerPanel) SequencerPanel->Shutdown();

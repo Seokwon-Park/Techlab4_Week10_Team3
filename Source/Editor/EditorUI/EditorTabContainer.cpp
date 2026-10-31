@@ -15,10 +15,62 @@ void FEditorTabContainer::AddTab(IEditorTab* Tab)
 	Tabs.Add(Tab);
 }
 
-void FEditorTabContainer::Tick(float DeltaTime)
+void FEditorTabContainer::RemoveTab(IEditorTab* Tab)
 {
-	for (IEditorTab* Tab : Tabs)
-		Tab->Tick(DeltaTime);
+	// 소유 객체는 UI 순회와 ImGui 렌더링이 끝난 뒤에만 파괴한다.
+	assert(!bRendering);
+	for (int32 Index = PendingCloseTabs.Num() - 1; Index >= 0; --Index)
+	{
+		if (PendingCloseTabs[Index] == Tab)
+			PendingCloseTabs.RemoveAt(Index);
+	}
+	for (int32 Index = Tabs.Num() - 1; Index >= 0; --Index)
+	{
+		if (Tabs[Index] == Tab)
+			Tabs.RemoveAt(Index);
+	}
+	if (MainSelectedTab == Tab) MainSelectedTab = nullptr;
+	if (FocusedTab == Tab) FocusedTab = nullptr;
+	if (PendingActivation == Tab) PendingActivation = nullptr;
+}
+
+void FEditorTabContainer::ActivateTab(IEditorTab* Tab)
+{
+	for (IEditorTab* Existing : Tabs)
+	{
+		if (Existing == Tab)
+		{
+			PendingActivation = Tab;
+			return;
+		}
+	}
+}
+
+void FEditorTabContainer::RequestCloseTab(IEditorTab* Tab)
+{
+	bool bRegistered = false;
+	for (IEditorTab* Existing : Tabs)
+		bRegistered |= Existing == Tab;
+	if (!bRegistered || !Tab->CanClose())
+		return;
+	for (IEditorTab* Existing : PendingCloseTabs)
+	{
+		if (Existing == Tab)
+			return;
+	}
+	PendingCloseTabs.Add(Tab);
+}
+
+void FEditorTabContainer::ProcessCloseRequests()
+{
+	assert(!bRendering);
+	TArray<IEditorTab*> Requests = std::move(PendingCloseTabs);
+	PendingCloseTabs = {};
+	for (IEditorTab* Tab : Requests)
+	{
+		RemoveTab(Tab);
+		Tab->OnCloseRequested();
+	}
 }
 
 void FEditorTabContainer::DrawMainMenuBar()
@@ -33,6 +85,9 @@ void FEditorTabContainer::DrawMainMenuBar()
 
 void FEditorTabContainer::OnRender()
 {
+	assert(!bRendering);
+	bRendering = true;
+
 	// 일반 패널은 각 편집기의 내부 도킹 영역에서만 배치한다.
 	ImGuiWindowClass TabClass;
 	TabClass.ClassId = ImGui::GetID("EditorTabClass");
@@ -67,8 +122,28 @@ void FEditorTabContainer::OnRender()
 
 		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
 		ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 10.0f));
-		const bool bVisible = ImGui::Begin(Tab->GetTabName(), nullptr, Flags);
+		const bool bActivate = PendingActivation == Tab;
+		if (bActivate)
+			ImGui::SetNextWindowFocus();
+		bool bOpen = true;
+		const bool bVisible = ImGui::Begin(Tab->GetTabName(), Tab->CanClose() ? &bOpen : nullptr, Flags);
 		ImGui::PopStyleVar(2);
+
+		if (!bOpen)
+		{
+			RequestCloseTab(Tab);
+			Tab->OnRender(false);
+			ImGui::End();
+			continue;
+		}
+
+		if (bActivate && bVisible)
+		{
+			ImGuiViewport* Viewport = ImGui::GetWindowViewport();
+			if (Viewport->PlatformHandle && ImGui::GetPlatformIO().Platform_SetWindowFocus)
+				ImGui::GetPlatformIO().Platform_SetWindowFocus(Viewport);
+			PendingActivation = nullptr;
+		}
 
 		if (bVisible)
 		{
@@ -87,6 +162,7 @@ void FEditorTabContainer::OnRender()
 			FocusedTab = Tab;
 		ImGui::End();
 	}
+	bRendering = false;
 }
 
 bool FEditorTabContainer::IsInDockSpace(const ImGuiWindow* Window, ImGuiID DockSpaceId)
