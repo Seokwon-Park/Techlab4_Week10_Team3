@@ -12,9 +12,8 @@ class ASkeletalMeshActor : public AActor
 public:
 	ASkeletalMeshActor();
 	
-	USkinnedMeshComponent* GetSkeletalMeshComponent() const { return SkeletalMeshComponent; }
-
+	USkeletalMeshComponent* GetSkeletalMeshComponent() const { return SkeletalMeshComponent; }
 private:
-	USkinnedMeshComponent* SkeletalMeshComponent;
+	USkeletalMeshComponent* SkeletalMeshComponent = nullptr;
 };
 

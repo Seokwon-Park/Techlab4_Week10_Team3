@@ -1,7 +1,6 @@
 #pragma once
 
 #include "SkinnedMeshComponent.h"
-#include "Render/SkeletalMeshData.h"
 #include "SkeletalMeshComponent.generated.h"
 
 UCLASS()
@@ -19,5 +18,11 @@ public:
 	void ResetPose();
 	void RefreshBoneTransformsNow();
 
+protected:
+	void RefreshBoneTransforms() override;
+	void OnSkeletalMeshChanged() override;
+
 private:
+	TArray<FTransform> BoneSpaceTransforms;
+
 };

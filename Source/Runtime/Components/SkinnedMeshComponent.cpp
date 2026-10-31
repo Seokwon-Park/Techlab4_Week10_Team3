@@ -98,7 +98,7 @@ void USkinnedMeshComponent::RefreshBoneTransforms()
 {
 	const TArray<FBoneInfo>& Bones = SkeletalMesh->GetRefSkeleton();
 	ComponentSpaceTransforms.SetNum(Bones.Num());
-	for (int32 i = 0; i = Bones.Num(); ++i)
+	for (int32 i = 0; i < Bones.Num(); ++i)
 	{
 		const FMatrix Local = Bones[i].LocalBindPose.GetLocalMatrix();
 		const int32 Parent = Bones[i].ParentIndex;

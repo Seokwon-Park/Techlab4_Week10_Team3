@@ -12,12 +12,16 @@
 #include "Audio/AudioDevice.h"
 #include "Components/AudioComponent.h"
 
+#include "Tasks/Tasks.h"
+
 #include "Serialization/JsonArchive.h"
 
 UEngine* GEngine = nullptr;
 
 bool UEngine::Init()
 {
+	Tasks::FTaskScheduler::Get().Initialize();
+
 	// Keep reflected shape classes linked even when no actor references them yet.
 	// Add Component and scene loading both discover these classes by registration.
 	UBoxComponent::StaticClass();
