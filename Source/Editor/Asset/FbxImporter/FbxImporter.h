@@ -3,6 +3,14 @@
 #include <fbxsdk.h>
 #include "Core/EngineString.h"
 #include "Render/SkeletalMeshData.h"
+#include "Asset/FbxImporter/FbxMeshBake.h"
+
+struct FFbxImportResult
+{
+	TArray<FString> Paths;
+	TArray<FString> Warnings;
+	bool bSkipped = false;
+};
 
 // Import 중에만 사용하는 Node별 자료. SDK 포인터는 최종 엔진 출력에 넘기지 않는다.
 struct FFbxMeshNodeData
@@ -40,6 +48,8 @@ public:
 	const TArray<FBoneInfo>& GetBones() const { return Bones; }
 	// ReadSkeletonData 성공 후 호출한다. SDK 수명과 독립적인 Geometry/Weight/Bone 출력을 만든다.
 	bool BuildSkeletalMesh(FSkeletalMeshData& OutData, TArray<FString>& OutWarnings, FString& OutError) const;
+	// Assets/FBX에 저장한 뒤 미로드 Asset을 등록한다. 이미 로드된 객체는 유지한다.
+	static bool ImportToAssets(const FString& Path, EFbxImportMode Mode, FFbxImportResult& OutResult, FString& OutError);
 
 private:
 	void ClearSkeletonData();
