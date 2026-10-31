@@ -22,7 +22,7 @@ public:
 	TArray<TUniquePtr<IEditorPanel>>& GetPanels() { return Panels; }
 
 	template <typename T>
-	T* AddEditorPanel()
+	T* AddPanel()
 	{
 		TUniquePtr<T> Panel = MakeUnique<T>();
 		T* Result = Panel.get();

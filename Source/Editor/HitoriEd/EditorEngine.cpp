@@ -107,7 +107,9 @@ bool UEditorEngine::Init()
 	EditorUI->OnPackageGame.Add([this]() { Packager.Start("Release"); });
 	EditorUI->SetIsPackagingQuery([this]() { return Packager.IsRunning(); });
 
-	OutputLogPanel = EditorUI->AddEditorPanel<FOutputLogPanel>();
+	FLevelEditorTab& LevelEditorTab = EditorUI->GetLevelEditorTab();
+
+	OutputLogPanel = LevelEditorTab.AddPanel<FOutputLogPanel>();
 	FLog::AddSink(OutputLogPanel);
 	HTR_LOG(Info, "Editor Initialize...");
 
@@ -132,7 +134,7 @@ bool UEditorEngine::Init()
 
 	Gizmo = MakeUnique<FGizmo>();
 
-	DetailsPanel = EditorUI->AddEditorPanel<FDetailsPanel>();
+	DetailsPanel = LevelEditorTab.AddPanel<FDetailsPanel>();
 	DetailsPanel->SetImGuiRenderer(ImGuiRenderer.get());
 	DetailsPanel->SetShadowPreviewQuery([this](const ULightComponent* Light, FTexture2DArray*& Atlas,
 		TArray<FLightShadowRenderData>& Shadows)
@@ -155,9 +157,9 @@ bool UEditorEngine::Init()
 		});
 
 
-	EditorControlsPanel = EditorUI->AddEditorPanel<FEditorControlsPanel>();
-	ViewportsPanel = EditorUI->AddEditorPanel<FViewportsPanel>();
-	ContentDrawerPanel = EditorUI->AddEditorPanel<FContentDrawerPanel>();
+	EditorControlsPanel = LevelEditorTab.AddPanel<FEditorControlsPanel>();
+	ViewportsPanel = LevelEditorTab.AddPanel<FViewportsPanel>();
+	ContentDrawerPanel = LevelEditorTab.AddPanel<FContentDrawerPanel>();
 
 	// OutLine
 	OutlineRenderer = MakeUnique<FOutlineRenderer>();
@@ -168,11 +170,11 @@ bool UEditorEngine::Init()
 	CascadeFloorRenderer = MakeUnique<FCascadeFloorRenderer>();
 	CascadeFloorRenderer->Init();
 
-	SettingsPanel = EditorUI->AddEditorPanel<FSettingsPanel>();
-	SequencerPanel = EditorUI->AddEditorPanel<FSequencerPanel>();
+	SettingsPanel = LevelEditorTab.AddPanel<FSettingsPanel>();
+	SequencerPanel = LevelEditorTab.AddPanel<FSequencerPanel>();
 	OutputLogPanel->SetEditorSettings(&SettingsPanel->GetMutableSettings());
 
-	UIEditorPanel = EditorUI->AddEditorPanel<FUIEditorPanel>();
+	UIEditorPanel = LevelEditorTab.AddPanel<FUIEditorPanel>();
 	ContentDrawerPanel->SetCreateWidgetCallback([this](const FString& Path) { UIEditorPanel->NewAsset(Path); });
 	ContentDrawerPanel->SetOpenWidgetCallback([this](const FString& Path) { UIEditorPanel->OpenAsset(Path); });
 
@@ -201,7 +203,7 @@ bool UEditorEngine::Init()
 
 
 
-	OutlinerPanel = EditorUI->AddEditorPanel<FOutlinerPanel>();
+	OutlinerPanel = LevelEditorTab.AddPanel<FOutlinerPanel>();
 	OutlinerPanel->SetWorld(GetActiveWorld());
 	OutlinerPanel->SetSelectionCallback(
 		[this](USceneComponent* Root)
@@ -321,8 +323,9 @@ bool UEditorEngine::Init()
 	Stop.CanExecute = [this]()->bool {return PlayWorld; };
 	Stop.Execute = [this]() { RequestEndPlayMap(); };
 
-	EditorUI->GetToolbar()->SetCommands({ Play, Pause, Resume, StepFrame, Stop });
-	EditorUI->GetToolbar()->SetPlayModeBinding(
+	FLevelEditorToolbar& LevelEditorToolbar = *LevelEditorTab.GetToolbar();
+	LevelEditorToolbar.SetCommands({ Play, Pause, Resume, StepFrame, Stop });
+	LevelEditorToolbar.SetPlayModeBinding(
 		[this]() { return PlayMode; },
 		[this](EPlayModeType Mode) { PlayMode = Mode; },
 		[this]() { return !IsPlaying(); });

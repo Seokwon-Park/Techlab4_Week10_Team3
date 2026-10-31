@@ -13,19 +13,13 @@ public:
 	void Tick(float DeltaTime);
 	void OnRender();
 
-	template <typename T>
-	T* AddEditorPanel()
-	{
-		return LevelEditorTab.AddEditorPanel<T>();
-	}
-
 	// 같은 애셋의 중복 생성 여부와 탭의 수명은 호출자가 관리한다.
 	void AddEditorTab(IEditorTab* Tab) { TabContainer.AddTab(Tab); }
 
 	IEditorTab* GetMainSelectedTab() const { return TabContainer.GetMainSelectedTab(); }
 	IEditorTab* GetFocusedTab() const { return TabContainer.GetFocusedTab(); }
 
-	FLevelEditorToolbar* GetToolbar() { return LevelEditorTab.GetToolbar(); }
+	FLevelEditorTab& GetLevelEditorTab() { return LevelEditorTab; }
 
 	TDelegate<> OnNewScene;
 	TDelegate<> OnOpenScene;
