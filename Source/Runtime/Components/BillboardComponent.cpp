@@ -118,27 +118,6 @@ void UBillboardComponent::SubmitToRenderQueue(FRenderQueue& RenderQueue, const F
 	RenderQueue.Add(Packet);
 }
 
-void UBillboardComponent::Serialize(json& Handle, bool bIsLoading)
-{
-	Super::Serialize(Handle, bIsLoading);
-
-	if (bIsLoading)
-	{
-		// 예전 파일은 "Material"이 문자열(경로)이라 형식을 확인하고 읽는다
-		if (Handle.contains("Material") && Handle["Material"].is_object())
-		{
-			if (UMaterial* Loaded = UMaterial::LoadMaterial(Handle["Material"]))
-			{
-				Material = Loaded;   // 못 만들었으면 생성자 기본값 유지
-			}
-		}
-	}
-	else
-	{
-		Handle["Material"] = Material ? UMaterial::SaveMaterial(Material) : json(nullptr);
-	}
-}
-
 // 판정용 Billboard 행렬. 렌더(SubmitToRenderQueue)와 같은 FViewContext::BuildBillboardMatrix로 만들어
 // 화면에 보이는 면과 Raycast에 맞는 면이 같도록 한다.
 void UBillboardComponent::GetWorldTransformedMatrix(FMatrix* OutWorldMatrix) const

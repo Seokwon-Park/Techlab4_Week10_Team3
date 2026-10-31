@@ -8,6 +8,8 @@
 #include "Editor/Viewports/ViewportsPanel.h"
 #include "Editor/Viewports/EditorViewportClient.h"
 
+#include "GameFramework/Actor/SkeletalMeshActor.h"
+
 #include "Input/InputSystem.h"
 
 #include <cmath>
@@ -105,6 +107,11 @@ void FEditorControlsPanel::OnRender()
 	ImGui::SameLine();
 	if (ImGui::Button("Sky Light"))
 		World->SpawnActor(ASkyLightActor::StaticClass());
+
+	ImGui::Dummy(ImVec2(0.0f, SubsectionGap));
+	ImGui::SeparatorText("Skeletal Mesh");
+	if (ImGui::Button("Test Bone Stick"))
+		World->SpawnActor(ASkeletalMeshActor::StaticClass());
 
 	//////////////////////////////////////////////////////
 

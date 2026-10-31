@@ -144,6 +144,21 @@ namespace FMath
 		return A + (B - A) * Alpha;
 	}
 
+	template<class T>
+	inline float InverseLerp(const T& A, const T& B, const T& X)
+	{
+		return (X - A) / (B - A);
+	}
+
+	template<>
+	inline float InverseLerp(const FVector& A, const FVector& B, const FVector& X)
+	{
+		const FVector AB = B - A;
+		const float LengthSq = AB.Dot(AB);
+		return LengthSq > 0.0f ? (X - A).Dot(AB) / LengthSq : 0.0f;
+	}
+
+
 	// Hermite 큐빅: P0, P1: 위치, T0, T1: 접선(속도), A: 0~1
 	// 접선 0이면 smoothstep(3t^2 - 2t^3)와 동일
 	template<class T>

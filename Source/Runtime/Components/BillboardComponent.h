@@ -51,8 +51,6 @@ public:
 	// View별 ViewportLayout가 계산한 Billboard 행렬을 사용해 같은 렌더 패킷 형식으로 제출한다.
 	void SubmitToRenderQueue(FRenderQueue& RenderQueue, const FMatrix& BillboardWorldMatrix);
 
-	virtual void Serialize(json& Handle, bool bIsLoading) override;
-
 	using Super::Serialize;
 	virtual void Serialize(FStructuredArchive::FRecord Record) override;
 

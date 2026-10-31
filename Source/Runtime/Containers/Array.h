@@ -299,6 +299,16 @@ public:
 		mDatas.swap(Other.mDatas);
 	}
 
+	[[nodiscard]] bool operator==(const TArray& Other) const
+	{
+		if (Num() != Other.Num()) return false;
+		for (int32 I = 0; I < Num(); ++I)
+		{
+			if (!((*this)[I] == Other[I])) return false;
+		}
+		return true;
+	}
+
 private:
 	std::vector<T> mDatas;
 	SizeType ArrayNum; // Size

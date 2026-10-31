@@ -71,44 +71,10 @@ namespace
 		Mesh->VertexBuffer = std::move(VB);
 		Mesh->IndexBuffer = std::move(IB);
 
-		UMaterial* DefaultMaterial = UAssetManager::GetAssetByPath<UMaterial>("DefaultMaterial");
-		if (!DefaultMaterial)
+		// 빈 슬롯이면 위에서 Default 슬롯을 넣었으므로 원본(MeshData)이 아니라 Mesh->MeshData를 쓴다
+		if (!UAssetManager::BuildMaterialsFromSlots(Mesh->MeshData.MaterialSlots, Mesh->Materials))
 		{
 			return nullptr;
-		}
-
-		// MaterialSlots를 실제 UMaterial로 변환
-		for (const FStaticMaterialSlot& Slot : Mesh->MeshData.MaterialSlots)
-		{
-			UMaterial* Material = UMaterial::CreateInstance(DefaultMaterial);
-			if (!Material)
-			{
-				return nullptr;
-			}
-			Material->BaseColor = Slot.BaseColor;
-			if (Material->BaseColor.W < 1.0f)
-			{
-				Material->BlendState = EBlendState::AlphaBlend;
-				Material->DepthStencilState = EDepthStencilState::ReadOnly;
-			}
-
-			if (!Slot.DiffuseTexturePath.empty())
-			{
-				UTexture2D* Texture = UAssetManager::Get().LoadTexture(Slot.DiffuseTexturePath);
-
-				if (Texture)
-				{
-					Material->Textures[0] = Texture;
-				}
-			}
-
-			if (!Slot.NormalTexturePath.empty()) {
-				if (UTexture2D* NormalTexture{ UAssetManager::Get().LoadTexture(Slot.NormalTexturePath) }) {
-					Material->Textures[1] = NormalTexture;
-				}
-			}
-
-			Mesh->Materials.Add(Material);
 		}
 
 		Mesh->MeshData.BuildTriangleBVH();
@@ -537,4 +503,50 @@ FLODGenerateResult UAssetManager::GenerateStaticMeshLODs(UStaticMesh& Mesh, cons
 	Mesh.ScreenThresholds = Request.ScreenThresholds;
 	Mesh.RebuildRenderData();
 	return Result;
+}
+
+bool UAssetManager::BuildMaterialsFromSlots(const TArray<FStaticMaterialSlot>& Slots, TArray<UMaterial*>& OutMaterials)
+{
+	// MaterialSlots를 실제 UMaterial로 변환
+	UMaterial* DefaultMaterial = UAssetManager::GetAssetByPath<UMaterial>("DefaultMaterial");
+	if (!DefaultMaterial)
+	{
+		return false;
+	}
+
+	for (const FStaticMaterialSlot& Slot : Slots)
+	{
+		UMaterial* Material = UMaterial::CreateInstance(DefaultMaterial);
+		if (!Material)
+		{
+			return false;
+		}
+		Material->BaseColor = Slot.BaseColor;
+		if (Material->BaseColor.W < 1.0f)
+		{
+			Material->BlendState = EBlendState::AlphaBlend;
+			Material->DepthStencilState = EDepthStencilState::ReadOnly;
+		}
+
+		if (!Slot.DiffuseTexturePath.empty())
+		{
+			UTexture2D* Texture = UAssetManager::Get().LoadTexture(Slot.DiffuseTexturePath);
+
+			if (Texture)
+			{
+				Material->Textures[0] = Texture;
+			}
+		}
+
+		if (!Slot.NormalTexturePath.empty())
+		{
+			if (UTexture2D* NormalTexture = UAssetManager::Get().LoadTexture(Slot.NormalTexturePath))
+			{
+				Material->Textures[1] = NormalTexture;
+			}
+		}
+
+		OutMaterials.Add(Material);
+	}
+	return true;
 }

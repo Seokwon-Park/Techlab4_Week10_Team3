@@ -2,20 +2,29 @@
 
 #include "Math/Frustum.h"
 #include "Render/MeshRenderData.h"
+#include "Render/RenderPacket.h"
 
 class FScene;
 class UPrimitiveComponent;
 class UStaticMesh;
 class UMaterial;
+class FRenderQueue;
+struct FViewContext;
 
 class FPrimitiveSceneProxy
 {
 public:
 	explicit FPrimitiveSceneProxy(UPrimitiveComponent* InComponent);
 	
-	~FPrimitiveSceneProxy();
+	virtual ~FPrimitiveSceneProxy();
+	virtual void UpdateRenderState();
+
+	virtual bool HasDynamicMeshElements() const { return false; }
+	virtual void GetDynamicMeshElements(FRenderQueue& Queue, const FViewContext& View);
+
+	bool IsSkinned() const { return bSkinned; }
+	
 	void UpdateTransform();
-	void UpdateRenderState();
 	void OnMeshRenderDataChanged();
 	void OnMeshDestroyed();
 
@@ -39,12 +48,15 @@ public:
 
 	bool bCastsShadow = true;
 	bool bReceiveShadow = true;
+protected:
+	bool bSkinned = false;
+	TSharedPtr<const FMeshRenderState> RenderState;
+	void UpdateCommonFlags();
 private:
 	friend class FScene;
 	FScene* Scene = nullptr;
 	UPrimitiveComponent* Component = nullptr;
 	UStaticMesh* Mesh = nullptr;
-	TSharedPtr<const FMeshRenderState> RenderState;
 	FMatrix LocalToWorld;
 	FMatrix WorldToLocal;
 	FAABB Bounds;
