@@ -18,6 +18,7 @@
 #include "Render/PostProcess/CameraOverlayRenderer.h"
 #include "Render/PostProcess/FXAARenderer.h"
 #include "Render/PostProcess/ToneMapData.h"
+#include "Render/DecalData.h"
 #include "Text/TextRenderer.h"
 #include "UObject/UObjectIterator.h"
 
@@ -622,15 +623,22 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 				{
 					if (!bCorePassSucceeded || ForwardBatches.IsEmpty()) return;
 
+					FDecalData Data{};
+					Data.W[0][0] = 0.5f;
+					Data.VP[0][0] = 0.5f;
+
 					FPipelineState* DecalPipeline = FRenderResourceManager::GetPSO(EPSOType::Decal);
 					if (!DecalPipeline || !DecalPipeline->Shader) return;
 
-					// 실제 메시 패스와 같은 VS를 사용해 깊이 계산을 일치시킨다.
+					FConstantBuffer* Constants = Renderer->GetDecalConstants();
 					TArray<FMeshDrawBatch> DecalBatches = ForwardBatches;
 					for (FMeshDrawBatch& Batch : DecalBatches)
 					{
 						Batch.Pipeline = * DecalPipeline;
 					}
+
+					RenderCommand::UpdateBufferData(Constants, &Data, sizeof(Data));
+					RenderCommand::BindConstantBuffer(1, Constants, EShaderBindFlagBits::Pixel);
 					Renderer->DrawMeshes(DecalBatches);
 				})) return false;
 		}

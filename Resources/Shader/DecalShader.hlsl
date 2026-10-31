@@ -7,6 +7,12 @@ cbuffer PerObject : register(b0)
     matrix Projection;
 };
 
+cbuffer DecalConstants : register(b1)
+{
+    matrix DecalWorld;
+    matrix DecalVP;
+}
+
 
 struct VS_IN
 {
@@ -26,5 +32,5 @@ float4 mainVS(VS_IN Input) : SV_POSITION
 
 float4 mainPS() : SV_Target
 {
-    return float4(1.0, 0.0, 0.0, 1.0);
+    return float4(DecalWorld._11, DecalWorld._11, DecalWorld._11, 1.0);     // 상수버퍼 제대로 넘어갔나 실험용!
 }
