@@ -1,5 +1,6 @@
 #include "EnginePCH.h"
 #include "Editor/EditorUI/EditorUI.h"
+#include "Asset/FbxImporter/FbxMeshBake.h"
 
 
 bool FEditorUI::Init(bool bInUseDockSpace, bool bInPassthruCentralNode)
@@ -123,6 +124,14 @@ void FEditorUI::DrawMainMenuBar()
 
 			if (ImGui::MenuItem("Save")) { if (OnSaveScene) OnSaveScene(); }
 			if (ImGui::MenuItem("Save As...")) { if (OnSaveSceneAs) OnSaveSceneAs(); }
+
+			ImGui::Separator();
+			if (ImGui::BeginMenu("Import FBX"))
+			{
+				if (ImGui::MenuItem("Static Mesh...")) { if (OnImportFbx) OnImportFbx(EFbxImportMode::Static); }
+				if (ImGui::MenuItem("Skeletal Mesh...")) { if (OnImportFbx) OnImportFbx(EFbxImportMode::Skeletal); }
+				ImGui::EndMenu();
+			}
 
 			ImGui::EndMenu();
 		}

@@ -104,6 +104,7 @@ bool UEditorEngine::Init()
 	EditorUI->SetOpenSceneCallback([this]() { OpenScene(); });
 	EditorUI->SetSaveSceneCallback([this]() { SaveCurrentScene(); });
 	EditorUI->SetSaveSceneAsCallback([this]() { SaveSceneAs(); });
+	EditorUI->SetImportFbxCallback([](EFbxImportMode Mode) { FEditorFileUtils::ImportFbx(Mode); });
 	EditorUI->SetPackageGameCallback([this]() { Packager.Start("Release"); });
 	EditorUI->SetIsPackagingQuery([this]() { return Packager.IsRunning(); });
 
