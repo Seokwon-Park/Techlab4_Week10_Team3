@@ -5,6 +5,66 @@
 
 namespace
 {
+	bool IsBoneNode(FbxNode* Node)
+	{
+		const FbxNodeAttribute* Attribute = Node->GetNodeAttribute();
+		if (!Attribute) return false;
+		const auto Type = Attribute->GetAttributeType();
+		return Type == FbxNodeAttribute::eSkeleton || Type == FbxNodeAttribute::eNull || Type == FbxNodeAttribute::eMesh;
+	}
+
+	FbxNode* FindSkeletonRoot(FbxNode* Node, FbxScene* Scene, bool bIsBlender)
+	{
+		while (FbxNode* Parent = Node->GetParent())
+		{
+			if (Parent == Scene->GetRootNode() || !IsBoneNode(Parent)) break;
+			const auto Type = Parent->GetNodeAttribute()->GetAttributeType();
+			// Blender의 Armature 컨테이너는 Bone에서 제외한다. 그 Transform은 Root의 Global에 남는다.
+			if (bIsBlender && Type == FbxNodeAttribute::eNull && Parent->GetParent() == Scene->GetRootNode() && _stricmp(Parent->GetName(), "armature") == 0) break;
+			// UE GetRootSkeleton처럼 Skin Mesh가 Bone의 조상인 경우 그 Mesh까지 올라가지 않는다.
+			if (Type == FbxNodeAttribute::eMesh && Parent->GetMesh()->GetDeformerCount(FbxDeformer::eSkin) > 0) break;
+			Node = Parent;
+		}
+		return Node;
+	}
+
+	void CollectBoneNodes(FbxNode* Node, TArray<FbxNode*>& Nodes)
+	{
+		if (!IsBoneNode(Node)) return;
+		Nodes.Add(Node);
+		for (int Child = 0; Child < Node->GetChildCount(); ++Child) CollectBoneNodes(Node->GetChild(Child), Nodes);
+	}
+
+	// Bind Pose의 행렬은 SDK 계약상 Global이다. 없으면 Cluster Link, 현재 Global 순으로 사용한다.
+	FbxAMatrix ReadBindGlobal(FbxScene* Scene, FbxNode* Node, const TArray<FbxCluster*>& Clusters, TArray<FString>& Warnings)
+	{
+		FbxAMatrix Global;
+		for (int I = 0; I < Scene->GetPoseCount(); ++I)
+		{
+			FbxPose* Pose = Scene->GetPose(I);
+			if (!Pose->IsBindPose()) continue;
+			const int Index = Pose->Find(Node);
+			if (Index < 0) continue;
+			const FbxMatrix& Matrix = Pose->GetMatrix(Index);
+			std::copy_n(static_cast<const double*>(Matrix), 16, static_cast<double*>(Global));
+			return Global;
+		}
+		Warnings.Add("Bone missing from Bind Pose; using Cluster Link or current Global: " + FString(Node->GetName()));
+		for (FbxCluster* Cluster : Clusters)
+		{
+			if (Cluster->GetLink() != Node) continue;
+			Cluster->GetTransformLinkMatrix(Global);
+			return Global;
+		}
+		return Node->EvaluateGlobalTransform();
+	}
+
+	bool IsFiniteMatrix(const FbxAMatrix& Matrix)
+	{
+		const double* Values = Matrix;
+		return std::all_of(Values, Values + 16, [](double Value) { return std::isfinite(Value); });
+	}
+
 	using FVertexKey = std::pair<int32, std::array<float, 9>>;
 
 	// OBJ Importer와 같은 방식으로 정점 조합의 해시를 만든다.
@@ -94,7 +154,7 @@ namespace
 			const auto Text = Absolute.lexically_normal().generic_u8string();
 			return FString(Text.begin(), Text.end());
 		}
-		// TODO(D-9): Embedded Texture 추출 지원. 현재는 원본 파일만 찾는다.
+		// TODO: Embedded Texture 추출 지원. 원본 파일만 찾는다.
 		Warn(Warnings, "Texture file not found (embedded-only texture is unsupported): " + FString(Material->GetName()) + "/" + PropertyName + " : " + Texture->GetFileName());
 		return {};
 	}
@@ -311,6 +371,9 @@ bool FFbxImporter::Open(const FString& Path, FString& OutError)
 		return false;
 	}
 
+	// Creator는 Reader가 살아 있을 때 읽어 두고 Blender Armature 예외 판별에 사용한다.
+	const FbxIOFileHeaderInfo* Header = Reader->GetFileHeaderInfo();
+	bIsBlender = Header && FString(Header->mCreator.Buffer()).starts_with("Blender");
 	// 파일 읽기는 끝났으므로 Reader를 닫고 메모리에 있는 Scene만 유지한다.
 	Reader->Destroy();
 	SourcePath = Path;
@@ -319,8 +382,10 @@ bool FFbxImporter::Open(const FString& Path, FString& OutError)
 
 void FFbxImporter::Close()
 {
+	ClearSkeletonData();
 	MeshNodes.Empty();
 	SourcePath.clear();
+	bIsBlender = false;
 	// Manager가 아직 남아 있는 Reader, Scene, IOSettings를 함께 해제한다.
 	if (Manager)
 		Manager->Destroy();
@@ -332,6 +397,7 @@ void FFbxImporter::Close()
 // 모든 Node 추출이 성공했을 때만 Results를 MeshNodes에 보관한다.
 bool FFbxImporter::ReadMeshData(TArray<FString>& OutWarnings, FString& OutError)
 {
+	ClearSkeletonData();
 	MeshNodes.Empty();
 	OutWarnings.Empty();
 	OutError.clear();
@@ -353,6 +419,8 @@ bool FFbxImporter::ReadMeshData(TArray<FString>& OutWarnings, FString& OutError)
 	if (Scene->GetGlobalSettings().GetAxisSystem() != Target) Target.ConvertScene(Scene);
 	// 단위도 설정값만 바꾸는 것이 아니라 Scene 데이터를 cm 기준으로 실제 변환한다.
 	if (Scene->GetGlobalSettings().GetSystemUnit() != FbxSystemUnit::cm) FbxSystemUnit::cm.ConvertScene(Scene);
+	// 축/단위 변환 전 자식 Node의 Global 캐시가 남지 않도록 비운다. UE ConvertScene 경로와 같은 처리다.
+	Scene->GetAnimationEvaluator()->Reset();
 	
 	FbxGeometryConverter Converter(Manager);
 	TArray<FFbxMeshNodeData> Results;
@@ -430,4 +498,119 @@ void FFbxImporter::BuildStaticMesh(FStaticMeshData& OutData) const
 		for (const FStaticMeshSection& Section : Mesh.Sections) 
 			OutData.Sections.Add({ IndexBase + Section.StartIndex, Section.IndexCount, SlotBase + Section.MaterialSlotIndex });
 	}
+}
+
+
+void FFbxImporter::ClearSkeletonData()
+{
+	Bones.Empty();
+	BoneIndices.Empty();
+	for (FFbxMeshNodeData& Mesh : MeshNodes) Mesh.RigidBoneIndex = -1;
+}
+
+// ReadMeshData로 축과 단위를 변환한 Scene에서 Bone 계층과 Bind를 읽는다. 실패 시 Skeleton 결과는 비워 둔다.
+bool FFbxImporter::ReadSkeletonData(TArray<FString>& OutWarnings, FString& OutError)
+{
+	ClearSkeletonData();
+	OutWarnings.Empty();
+	OutError.clear();
+	if (!Scene || MeshNodes.IsEmpty()) { OutError = "FBX: read mesh data before skeleton data"; return false; }
+
+	// 여러 Mesh의 Cluster를 모아 Bone 계층과 Bind를 조회한다. Weight 값은 읽지 않는다.
+	TArray<FbxCluster*> Clusters;
+	FbxNode* Root = nullptr;
+	for (const FFbxMeshNodeData& Mesh : MeshNodes)
+	{
+		if (!Mesh.bHasSkin) continue;
+		FbxMesh* Geometry = Mesh.Node->GetMesh();
+		for (int S = 0; S < Geometry->GetDeformerCount(FbxDeformer::eSkin); ++S)
+		{
+			auto* Skin = static_cast<FbxSkin*>(Geometry->GetDeformer(S, FbxDeformer::eSkin));
+			if (!Skin->GetClusterCount()) { OutError = "FBX: Skin has no clusters: " + FString(Mesh.Node->GetName()); return false; }
+			for (int C = 0; C < Skin->GetClusterCount(); ++C)
+			{
+				FbxCluster* Cluster = Skin->GetCluster(C);
+				FbxNode* Link = Cluster->GetLink();
+				if (!Link) { OutError = "FBX: Cluster has no Link: " + FString(Mesh.Node->GetName()); return false; }
+				FbxNode* Candidate = FindSkeletonRoot(Link, Scene, bIsBlender);
+				if (Root && Root != Candidate) { OutError = "FBX: multiple skeleton roots"; return false; }
+				Root = Candidate;
+				Clusters.Add(Cluster);
+			}
+		}
+	}
+	if (!Root) { OutError = "FBX: no skeleton bones"; return false; }
+	TArray<FbxNode*> Nodes;
+	CollectBoneNodes(Root, Nodes);
+	if (Nodes.IsEmpty()) { OutError = "FBX: no skeleton bones"; return false; }
+	// 기존 FSkinWeight::BoneIndex가 uint8이므로 최종 출력으로 표현할 수 있는 Bone 수에 맞춘다.
+	if (Nodes.Num() > 256) { OutError = "FBX: bone count exceeds 256"; return false; }
+
+	TMap<FbxNode*, int32> ResultIndices;
+	TSet<FString> Names;
+	TArray<FBoneInfo> ResultBones;
+	TArray<FbxAMatrix> BindGlobals;
+	TArray<FMatrix> BindWorlds;
+	for (int32 I = 0; I < Nodes.Num(); ++I)
+	{
+		FbxNode* Node = Nodes[I];
+		FBoneInfo Bone;
+		Bone.Name = Node->GetName();
+		if (Names.Contains(Bone.Name)) { OutError = "FBX: duplicate bone name: " + Bone.Name; return false; }
+		Names.Add(Bone.Name);
+		if (I > 0)
+		{
+			const int32* Parent = ResultIndices.Find(Node->GetParent());
+			if (!Parent) { OutError = "FBX: bone parent is not in skeleton: " + Bone.Name; return false; }
+			Bone.ParentIndex = *Parent;
+		}
+
+		const FbxAMatrix Global = ReadBindGlobal(Scene, Node, Clusters, OutWarnings);
+		const double GlobalDeterminant = Global.Determinant();
+		if (!IsFiniteMatrix(Global) || !std::isfinite(GlobalDeterminant) || GlobalDeterminant == 0) { OutError = "FBX: invalid Bind Global: " + Bone.Name; return false; }
+		const FbxAMatrix Local = Bone.ParentIndex < 0 ? Global : BindGlobals[Bone.ParentIndex].Inverse() * Global;
+		if (!IsFiniteMatrix(Local)) { OutError = "FBX: non-finite Bind Local: " + Bone.Name; return false; }
+		const FbxVector4 Translation = Local.GetT();
+		const FbxQuaternion Rotation = Local.GetQ();
+		const FbxVector4 Scale = Local.GetS();
+		// Position과 같은 Y 반전을 Transform에도 적용한다. Quaternion은 (x,-y,z,-w), Scale은 그대로다.
+		Bone.LocalBindPose.Location = MirrorY(Translation);
+		Bone.LocalBindPose.Scale = FVector(static_cast<float>(Scale[0]), static_cast<float>(Scale[1]), static_cast<float>(Scale[2]));
+		// SDK에서 Euler로 변환하여 정확히 +/-90도인 회전도 보존한다. FRotator 저장 순서는 Pitch(Y), Yaw(Z), Roll(X)다.
+		FbxAMatrix EngineRotation;
+		EngineRotation.SetQ(FbxQuaternion(Rotation[0], -Rotation[1], Rotation[2], -Rotation[3]));
+		const FbxVector4 Euler = EngineRotation.GetR();
+		Bone.LocalBindPose.Rotation = FRotator(static_cast<float>(Euler[1]), static_cast<float>(Euler[2]), static_cast<float>(Euler[0]));
+		const FMatrix LocalMatrix = Bone.LocalBindPose.GetLocalMatrix();
+		const double LocalDeterminant = LocalMatrix.Determinant();
+		if (!std::isfinite(LocalDeterminant) || LocalDeterminant == 0) { OutError = "FBX: non-finite/zero-scale Bind Local: " + Bone.Name; return false; }
+		// 런타임과 같은 저장 Local 누적에서 역행렬을 만들어 TRS 분해 후의 자세와 일치시킨다.
+		const FMatrix World = Bone.ParentIndex < 0 ? LocalMatrix : LocalMatrix * BindWorlds[Bone.ParentIndex];
+		Bone.InverseBindPose = World.Inverse();
+		for (int R = 0; R < 4; ++R)
+		{
+			for (int C = 0; C < 4; ++C)
+			{
+				if (!std::isfinite(World.M[R][C]) || !std::isfinite(Bone.InverseBindPose.M[R][C])) { OutError = "FBX: non-finite accumulated Bind: " + Bone.Name; return false; }
+			}
+		}
+		ResultIndices.Add(Node, I);
+		ResultBones.Add(std::move(Bone));
+		BindGlobals.Add(Global);
+		BindWorlds.Add(World);
+	}
+	for (FbxCluster* Cluster : Clusters)
+	{
+		if (!ResultIndices.Contains(Cluster->GetLink())) { OutError = "FBX: Cluster Link is outside the selected bone hierarchy"; return false; }
+	}
+
+	Bones = std::move(ResultBones);
+	BoneIndices = std::move(ResultIndices);
+	// Bone 계층의 Skin 없는 Mesh에 자기 Node의 Bone 번호를 연결한다.
+	for (FFbxMeshNodeData& Mesh : MeshNodes)
+	{
+		if (Mesh.bHasSkin) continue;
+		if (const int32* BoneIndex = BoneIndices.Find(Mesh.Node)) Mesh.RigidBoneIndex = *BoneIndex;
+	}
+	return true;
 }
