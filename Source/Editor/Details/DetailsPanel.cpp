@@ -418,6 +418,97 @@ namespace
 		return true;
 	}
 
+	bool DrawTexturePicker(UTexture2D* Current, const char* Label,
+		const std::function<void(UTexture2D*)>& OnPick)
+	{
+		const float ThumbnailSize{ 64.0f };
+		const float ItemThumbnailSize{ 24.0f };
+
+		bool bChanged{ false };
+
+		if (Current && Current->GetResource())
+		{
+			ImGui::Image((ImTextureID)Current->GetResource()->GetSRV(), { ThumbnailSize, ThumbnailSize });
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("%s", Current->GetPath().c_str());
+			}
+		}
+		else
+		{
+			ImGui::Button("Empty", { ThumbnailSize, ThumbnailSize });
+		}
+
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload * Payload{ ImGui::AcceptDragDropPayload(EditorDragDrop::Texture) })
+			{
+				UTexture2D* DroppedTexture{ *static_cast<UTexture2D**>(Payload->Data) };
+				if (DroppedTexture != Current)
+				{
+					OnPick(DroppedTexture);
+					bChanged = true;
+				}
+			}
+			ImGui::EndDragDropTarget();
+		}
+
+		const FString CurrentPath{ Current ? Current->GetPath() : "" };
+		const FString CurrentFileName{ Current ? GetAssetDisplayName(CurrentPath) : "None" };
+
+		ImGui::SetNextItemWidth(-1.0f);
+		const bool bOpen{ ImGui::BeginCombo(Label, CurrentFileName.c_str()) };
+		if (ImGui::IsItemHovered() && Current)
+		{
+			ImGui::SetTooltip("%s", CurrentPath.c_str());
+		}
+
+		if (bOpen)
+		{
+			if (ImGui::Selectable("None", Current == nullptr) && Current != nullptr)
+			{
+				OnPick(nullptr);
+				bChanged = true;
+			}
+
+			// 경로 없는 런타임 텍스처(렌더타겟 등)는 목록에서 뺀다.
+			for (TObjectIterator<UTexture2D> Iterator{}; Iterator; ++Iterator)
+			{
+				UTexture2D* ItemTexture{ *Iterator };
+				if (!ItemTexture->GetResource() || ItemTexture->GetPath().empty())
+				{
+					continue;
+				}
+
+				const bool bSelected{ ItemTexture == Current };
+				const FString ItemPath{ ItemTexture->GetPath() };
+				const FString ItemFileName{ GetAssetDisplayName(ItemPath) };
+
+				ImGui::PushID(ItemTexture);
+				ImGui::Image((ImTextureID)ItemTexture->GetResource()->GetSRV(), { ItemThumbnailSize, ItemThumbnailSize });
+				ImGui::SameLine();
+				if (ImGui::Selectable(ItemFileName.c_str(), bSelected, ImGuiSelectableFlags_None, { 0.0f, ItemThumbnailSize })
+					&& !bSelected)
+				{
+					OnPick(ItemTexture);
+					bChanged = true;
+				}
+				if (ImGui::IsItemHovered())
+				{
+					ImGui::SetTooltip("%s", ItemPath.c_str());
+				}
+				if (bSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+				ImGui::PopID();
+			}
+			ImGui::EndCombo();
+		}
+
+		return bChanged;
+	}
+
 	void DrawMaterialTextureSlot(UMeshComponent* MeshComponent, int32 MaterialSlot, int32 TextureSlot, const char* Label, UMaterial*& Effective, UMaterial*& Override) {
 		const float ThumbnailSize{ 64.0f };
 		const float ItemThumbnailSize{ 24.0f };
@@ -429,64 +520,11 @@ namespace
 		ImGui::TableSetColumnIndex(1);
 		ImGui::PushID(TextureSlot);
 
-		if (Texture && Texture->GetResource()) {
-			ImGui::Image((ImTextureID)Texture->GetResource()->GetSRV(), { ThumbnailSize, ThumbnailSize });
-			if (ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("%s", Texture->GetPath().c_str());
-			}
-		}
-		else {
-			ImGui::Button("Empty", { ThumbnailSize, ThumbnailSize });
-		}
-
-		if (ImGui::BeginDragDropTarget()) {
-			if (const ImGuiPayload * Payload{ ImGui::AcceptDragDropPayload(EditorDragDrop::Texture) }) {
-				UTexture2D* DroppedTexture{ *static_cast<UTexture2D**>(Payload->Data) };
-				if (SetMaterialTexture(MeshComponent, MaterialSlot, TextureSlot, DroppedTexture, Effective, Override)) {
-					Texture = DroppedTexture;
-				}
-			}
-			ImGui::EndDragDropTarget();
-		}
-
-		const FString CurrentPath{ Texture ? Texture->GetPath() : "" };
-		const FString CurrentFileName{ Texture ? GetAssetDisplayName(CurrentPath) : "None" };
-		ImGui::SetNextItemWidth(-1.0f);
-		const bool Open{ ImGui::BeginCombo("##Texture", CurrentFileName.c_str()) };
-		if (ImGui::IsItemHovered() && Texture) {
-			ImGui::SetTooltip("%s", CurrentPath.c_str());
-		}
-
-		if (Open) {
-			if (ImGui::Selectable("None", Texture == nullptr)) {
-				SetMaterialTexture(MeshComponent, MaterialSlot, TextureSlot, nullptr, Effective, Override);
-			}
-
-			for (TObjectIterator<UTexture2D> Iterator{}; Iterator; ++Iterator) {
-				UTexture2D* ItemTexture{ *Iterator };
-				if (!ItemTexture->GetResource() || ItemTexture->GetPath().empty()) {
-					continue;
-				}
-
-				const bool Selected{ ItemTexture == Texture };
-				const FString ItemPath{ ItemTexture->GetPath() };
-				const FString ItemFileName{ GetAssetDisplayName(ItemPath) };
-				ImGui::PushID(ItemTexture);
-				ImGui::Image((ImTextureID)ItemTexture->GetResource()->GetSRV(), { ItemThumbnailSize, ItemThumbnailSize });
-				ImGui::SameLine();
-				if (ImGui::Selectable(ItemFileName.c_str(), Selected, ImGuiSelectableFlags_None, { 0.0f, ItemThumbnailSize })) {
-					SetMaterialTexture(MeshComponent, MaterialSlot, TextureSlot, ItemTexture, Effective, Override);
-				}
-				if (ImGui::IsItemHovered()) {
-					ImGui::SetTooltip("%s", ItemPath.c_str());
-				}
-				if (Selected) {
-					ImGui::SetItemDefaultFocus();
-				}
-				ImGui::PopID();
-			}
-			ImGui::EndCombo();
-		}
+		DrawTexturePicker(Texture, "##Texture",
+			[&](UTexture2D* Picked)
+			{
+				SetMaterialTexture(MeshComponent, MaterialSlot, TextureSlot, Picked, Effective, Override);
+			});
 
 		ImGui::PopID();
 	}
@@ -844,6 +882,12 @@ namespace
 			else if (PropertyClass == UStaticMesh::StaticClass())
 			{
 				DrawMeshSlot(Object, reinterpret_cast<UStaticMesh**>(ObjPtr));
+			}
+			else if (PropertyClass == UTexture2D::StaticClass())
+			{
+				UTexture2D** TexturePtr = reinterpret_cast<UTexture2D**>(ObjPtr);
+				return DrawTexturePicker(*TexturePtr, Label,
+					[TexturePtr](UTexture2D* Picked) { *TexturePtr = Picked; });
 			}
 			return false;
 		}

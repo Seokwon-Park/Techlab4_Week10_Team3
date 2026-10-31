@@ -13,6 +13,8 @@ cbuffer DecalConstants : register(b1)
     matrix DecalVP;
 }
 
+Texture2D DecalTexture : register(t0);
+SamplerState DecalSampler : register(s0);
 
 struct VS_IN
 {
@@ -50,5 +52,10 @@ float4 mainPS(VS_OUT Input) : SV_Target
         discard;
     }
     
-    return float4(1, 1, 1, 1); // 상수버퍼 제대로 넘어갔나 실험용!
+    float u = 0.5 * NDC.x + 0.5;
+    float v = - 0.5 * NDC.y + 0.5;
+    
+    float4 color = DecalTexture.Sample(DecalSampler, float2(u, v));
+    
+    return float4(color.rgb, 1); // 상수버퍼 제대로 넘어갔나 실험용!
 }

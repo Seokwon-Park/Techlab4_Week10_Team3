@@ -38,7 +38,7 @@
                             "Name": "UDecalComponent",
                             "Parent": "",
                             "Properties": {
-                                "DecalTexture": null,
+                                "DecalTexture": "Assets/textures/DecalTest_Orientation.png",
                                 "Extent": {
                                     "X": 2.299999952316284,
                                     "Y": 0.30000001192092896,

@@ -628,20 +628,23 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 
 					FConstantBuffer* Constants = Renderer->GetDecalConstants();
 					TArray<FMeshDrawBatch> DecalBatches = ForwardBatches;
-					for (FMeshDrawBatch& Batch : DecalBatches)
-					{
-						Batch.Pipeline = *DecalPipeline;
-					}
-
 					FDecalData Data{};
 
 					const FScene& Scene = World->GetScene();
 					for (auto Decal : Scene.Decals) {
+						if (Decal->GetDecalTexture() == nullptr) continue;
+
 						Decal->SetDecalViewProj();
 						Data.VP = Decal->GetDecalVP();
 
 						RenderCommand::UpdateBufferData(Constants, &Data, sizeof(Data));
 						RenderCommand::BindConstantBuffer(1, Constants, EShaderBindFlagBits::Pixel);
+
+						for (FMeshDrawBatch& Batch : DecalBatches) {	
+							Batch.Pipeline = *DecalPipeline;
+							Batch.Textures = { {Decal->GetDecalTexture(), EShaderBindFlagBits::Pixel } };
+							Batch.Sampler = ESamplerState::LinearClamp;
+						}
 
 						Renderer->DrawMeshes(DecalBatches);
 					}
