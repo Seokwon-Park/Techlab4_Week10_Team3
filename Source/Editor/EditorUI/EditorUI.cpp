@@ -7,106 +7,47 @@ bool FEditorUI::Init(bool bInUseDockSpace, bool bInPassthruCentralNode)
 	bUseDockSpace = bInUseDockSpace;
 	bPassthruCentralNode = bInPassthruCentralNode;
 
-	Toolbar = MakeUnique<FLevelEditorToolbar>();
-
+	LevelEditorTab.SetDockSpaceOptions(bUseDockSpace, bPassthruCentralNode);
+	TabContainer.AddTab(&LevelEditorTab);
 	return true;
 }
 
 void FEditorUI::Tick(float DeltaTime)
 {
-	for (auto& Panel : Panels)
-	{
-
-		Panel->Tick(DeltaTime);
-	}
+	TabContainer.Tick(DeltaTime);
 }
 
 void FEditorUI::OnRender()
 {
 	DrawMainMenuBar();
 
-	if (Toolbar) Toolbar->Draw();
+	const ImGuiViewport* Viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(Viewport->WorkPos);
+	ImGui::SetNextWindowSize(Viewport->WorkSize);
+	ImGui::SetNextWindowViewport(Viewport->ID);
 
-	if (bUseDockSpace)
-	{
-		static bool dockspaceOpen = true;
-		static bool optFullscreen = true;
-		static bool optPadding = false;
-		static ImGuiDockNodeFlags dockspaceFlags = bPassthruCentralNode
-			? ImGuiDockNodeFlags_PassthruCentralNode
-			: ImGuiDockNodeFlags_None;
+	ImGuiWindowFlags Flags = ImGuiWindowFlags_NoDocking
+		| ImGuiWindowFlags_NoTitleBar
+		| ImGuiWindowFlags_NoCollapse
+		| ImGuiWindowFlags_NoResize
+		| ImGuiWindowFlags_NoMove
+		| ImGuiWindowFlags_NoBringToFrontOnFocus
+		| ImGuiWindowFlags_NoNavFocus;
 
-		// We are using the ImGuiWindowFlags_NoDocking flag to make the parent window not dockable into,
-		// because it would be confusing to have two docking targets within each others.
-		//ImGuiWindowFlags window_flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking;
-		ImGuiWindowFlags windowFlags = ImGuiWindowFlags_NoDocking;
-		if (optFullscreen)
-		{
-			const ImGuiViewport* viewport = ImGui::GetMainViewport();
-			ImGui::SetNextWindowPos(viewport->WorkPos);
-			ImGui::SetNextWindowSize(viewport->WorkSize);
-			ImGui::SetNextWindowViewport(viewport->ID);
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
-			windowFlags |= ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoCollapse | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove;
-			windowFlags |= ImGuiWindowFlags_NoBringToFrontOnFocus | ImGuiWindowFlags_NoNavFocus;
-		}
-		else
-		{
-			dockspaceFlags &= ~ImGuiDockNodeFlags_PassthruCentralNode;
-		}
+	if (bUseDockSpace && bPassthruCentralNode)
+		Flags |= ImGuiWindowFlags_NoBackground;
 
-		// When using ImGuiDockNodeFlags_PassthruCentralNode, DockSpace() will render our background
-		// and handle the pass-thru hole, so we ask Begin() to not render a background.
-		if (dockspaceFlags & ImGuiDockNodeFlags_PassthruCentralNode)
-			windowFlags |= ImGuiWindowFlags_NoBackground;
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	ImGui::Begin("DockingSpace", nullptr, Flags);
+	ImGui::PopStyleVar(3);
 
-		// Important: note that we proceed even if Begin() returns false (aka window is collapsed).
-		// This is because we want to keep our DockSpace() active. If a DockSpace() is inactive,
-		// all active windows docked into it will lose their parent and become undocked.
-		// We cannot preserve the docking relationship between an active window and an inactive docking, otherwise
-		// any change of dockspace/settings would lead to windows being stuck in limbo and never being visible.
-		if (!optPadding)
-			ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
-
-		//ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, Daydream::Application::GetInstance().isMaximzed ? ImVec2(6.0f, 6.0f) : ImVec2(0.0f, 0.0f));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, false ? ImVec2(6.0f, 6.0f) : ImVec2(0.0f, 0.0f));
-		ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 2.0f);
-		ImGui::PushStyleColor(ImGuiCol_MenuBarBg, ImVec4{ 0.0f, 0.0f, 0.0f, 0.0f });
-
-		ImGui::Begin("DockingSpace", &dockspaceOpen, windowFlags);
-		//m_DockSpacePos = { ImGui::GetWindowPos().x, ImGui::GetWindowPos().y };
-		//STS_CORE_WARN("Dock Space Coord = {0}, {1}", m_DockSpacePos.x, m_DockSpacePos.y);
-		ImGui::PopStyleColor(); // MenuBarBg
-		ImGui::PopStyleVar(2);
-
-		if (!optPadding)
-			ImGui::PopStyleVar();
-
-		if (optFullscreen)
-			ImGui::PopStyleVar(2);
-
-		// Submit the DockSpace
-		ImGuiIO& io = ImGui::GetIO();
-		if (io.ConfigFlags & ImGuiConfigFlags_DockingEnable)
-		{
-			ImGuiID dockspace_id = ImGui::GetID("EngineDockingSpace");
-			ImGui::DockSpace(dockspace_id, ImVec2(0.0f, 0.0f), dockspaceFlags);
-		}
-
-		ImGui::End();
-	}
-
-	for (auto& Panel : Panels)
-	{
-		if (Panel->IsOpen())
-		{
-			Panel->OnRender();
-		}
-	}
+	TabContainer.OnRender();
+	ImGui::End();
 }
 
-// 파일 메뉴의 요청을 애플리케이션 콜백으로 전달한다.
+// 파일 메뉴의 요청을 애플리케이션 델리게이트로 전달한다.
 void FEditorUI::DrawMainMenuBar()
 {
 	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 10.0f));
@@ -116,20 +57,20 @@ void FEditorUI::DrawMainMenuBar()
 	{
 		if (ImGui::BeginMenu("File"))
 		{
-			if (ImGui::MenuItem("New Scene")) { if (OnNewScene) OnNewScene(); }
-			if (ImGui::MenuItem("Open Scene...")) { if (OnOpenScene) OnOpenScene(); }
+			if (ImGui::MenuItem("New Scene")) { OnNewScene.Broadcast(); }
+			if (ImGui::MenuItem("Open Scene...")) { OnOpenScene.Broadcast(); }
 
 			ImGui::Separator();
 
-			if (ImGui::MenuItem("Save")) { if (OnSaveScene) OnSaveScene(); }
-			if (ImGui::MenuItem("Save As...")) { if (OnSaveSceneAs) OnSaveSceneAs(); }
+			if (ImGui::MenuItem("Save")) { OnSaveScene.Broadcast(); }
+			if (ImGui::MenuItem("Save As...")) { OnSaveSceneAs.Broadcast(); }
 
 			ImGui::EndMenu();
 		}
 
 		if (ImGui::BeginMenu("Window"))
 		{
-			for (auto& Panel : Panels)
+			for (auto& Panel : LevelEditorTab.GetPanels())
 			{
 				bool bOpen = Panel->IsOpen();
 
@@ -144,7 +85,7 @@ void FEditorUI::DrawMainMenuBar()
 		if (ImGui::BeginMenu("Build"))
 		{
 			const bool bCanPackage = !IsPackaging || !IsPackaging();
-			if (ImGui::MenuItem("Package Game (Release)", nullptr, false, bCanPackage)) { if (OnPackageGame) OnPackageGame(); }
+			if (ImGui::MenuItem("Package Game (Release)", nullptr, false, bCanPackage)) { OnPackageGame.Broadcast(); }
 			ImGui::EndMenu();
 		}
 

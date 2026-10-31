@@ -155,13 +155,13 @@ void UBenchmarkEngine::InitEditorTools()
 
 	// File 메뉴로 씬을 바꾼다. 기존 액터가 지워지므로 선택(기즈모·아웃라인·디테일)을 먼저 비운다.
 	// 아웃라이너 선택을 비우면 콜백으로 기즈모·아웃라인·디테일 선택도 함께 비워진다.
-	EditorUI->SetOpenSceneCallback([this]()
+	EditorUI->OnOpenScene.Add([this]()
 		{
 			OutlinerPanel->SelectActor(nullptr);
 			DetailsPanel->SelectComponent(nullptr);
 			FEditorFileUtils::LoadScene(World);
 		});
-	EditorUI->SetNewSceneCallback([this]()
+	EditorUI->OnNewScene.Add([this]()
 		{
 			OutlinerPanel->SelectActor(nullptr);
 			DetailsPanel->SelectComponent(nullptr);

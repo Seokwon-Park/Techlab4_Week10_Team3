@@ -100,11 +100,11 @@ bool UEditorEngine::Init()
 	EditorUI = MakeUnique<FEditorUI>();
 	EditorUI->Init();
 
-	EditorUI->SetNewSceneCallback([this]() { CreateNewScene(); });
-	EditorUI->SetOpenSceneCallback([this]() { OpenScene(); });
-	EditorUI->SetSaveSceneCallback([this]() { SaveCurrentScene(); });
-	EditorUI->SetSaveSceneAsCallback([this]() { SaveSceneAs(); });
-	EditorUI->SetPackageGameCallback([this]() { Packager.Start("Release"); });
+	EditorUI->OnNewScene.AddDynamic(this, &UEditorEngine::CreateNewScene);
+	EditorUI->OnOpenScene.AddDynamic(this, &UEditorEngine::OpenScene);
+	EditorUI->OnSaveScene.AddDynamic(this, &UEditorEngine::SaveCurrentScene);
+	EditorUI->OnSaveSceneAs.AddDynamic(this, &UEditorEngine::SaveSceneAs);
+	EditorUI->OnPackageGame.Add([this]() { Packager.Start("Release"); });
 	EditorUI->SetIsPackagingQuery([this]() { return Packager.IsRunning(); });
 
 	OutputLogPanel = EditorUI->AddEditorPanel<FOutputLogPanel>();
