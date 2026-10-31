@@ -5,6 +5,95 @@
 
 namespace
 {
+	// Node Geometry를 이어 붙이며 정점/Index/Material Slot 참조와 경계를 보정한다.
+	void AppendGeometry(const FStaticMeshData& Mesh, FStaticMeshData& Result)
+	{
+		if (Mesh.Vertices.IsEmpty()) return;
+		const uint32 VertexBase = static_cast<uint32>(Result.Vertices.Num());
+		const uint32 IndexBase = static_cast<uint32>(Result.Indices.Num());
+		const uint32 SlotBase = static_cast<uint32>(Result.MaterialSlots.Num());
+		if (Result.Vertices.IsEmpty()) Result.AABB = Mesh.AABB;
+		else Result.AABB.Expand(Mesh.AABB);
+		Result.Vertices.Append(Mesh.Vertices);
+		for (uint32 Index : Mesh.Indices) Result.Indices.Add(VertexBase + Index);
+		Result.MaterialSlots.Append(Mesh.MaterialSlots);
+		for (const FStaticMeshSection& Section : Mesh.Sections)
+			Result.Sections.Add({ IndexBase + Section.StartIndex, Section.IndexCount, SlotBase + Section.MaterialSlotIndex });
+	}
+
+	// Cluster의 Bone별 Weight를 Control Point별로 모으고, 동일 Bone 합산 후 상위 Influence를 정규화한다.
+	bool ReadControlPointWeights(FbxNode* Node, const TMap<FbxNode*, int32>& BoneIndices, TArray<FSkinWeight>& Result, TArray<FString>& Warnings, FString& Error)
+	{
+		FbxMesh* Mesh = Node->GetMesh();
+		const int32 Count = Mesh->GetControlPointsCount();
+		TArray<TMap<int32, double>> Influences;
+		Influences.SetNum(Count);
+		bool bWarnedLinkMode = false;
+		for (int S = 0; S < Mesh->GetDeformerCount(FbxDeformer::eSkin); ++S)
+		{
+			auto* Skin = static_cast<FbxSkin*>(Mesh->GetDeformer(S, FbxDeformer::eSkin));
+			if (Skin->GetSkinningType() == FbxSkin::eDualQuaternion || Skin->GetSkinningType() == FbxSkin::eBlend)
+			{
+				// TODO: Dual Quaternion/Blend 고유 변형 지원. 출력 Weight는 Linear Skinning에 사용한다.
+				Warnings.Add("FBX: Dual Quaternion/Blend skin imported as Linear: " + FString(Node->GetName()));
+			}
+			for (int C = 0; C < Skin->GetClusterCount(); ++C)
+			{
+				FbxCluster* Cluster = Skin->GetCluster(C);
+				const int32* BoneIndex = BoneIndices.Find(Cluster->GetLink());
+				if (!BoneIndex) { Error = "FBX: weight Cluster Link is outside skeleton: " + FString(Node->GetName()); return false; }
+				if (Cluster->GetLinkMode() != FbxCluster::eNormalize && !bWarnedLinkMode)
+				{
+					Warnings.Add("FBX: TotalOne/Additive weights normalized for Linear skinning: " + FString(Node->GetName()));
+					bWarnedLinkMode = true;
+				}
+				const int Entries = Cluster->GetControlPointIndicesCount();
+				const int* Points = Cluster->GetControlPointIndices();
+				const double* Weights = Cluster->GetControlPointWeights();
+				if (Entries < 0 || (Entries > 0 && (!Points || !Weights))) { Error = "FBX: invalid Cluster weight arrays: " + FString(Node->GetName()); return false; }
+				for (int I = 0; I < Entries; ++I)
+				{
+					const int CP = Points[I];
+					const double Weight = Weights[I];
+					if (CP < 0 || CP >= Count || !std::isfinite(Weight) || Weight < 0) { Error = "FBX: invalid Control Point index or weight: " + FString(Node->GetName()); return false; }
+					if (Weight == 0) continue;
+					double& Sum = Influences[CP].FindOrAdd(*BoneIndex);
+					Sum += Weight;
+					if (!std::isfinite(Sum)) { Error = "FBX: weight sum overflow: " + FString(Node->GetName()); return false; }
+				}
+			}
+		}
+		Result.SetNum(Count);
+		for (int32 CP = 0; CP < Count; ++CP)
+		{
+			TArray<std::pair<int32, double>> Sorted;
+			for (const auto& Influence : Influences[CP]) Sorted.Add({ Influence.first, Influence.second });
+			if (Sorted.IsEmpty())
+			{
+				// TODO: Influence 없는 Control Point의 대체 정책 지원. 임의 Bone에 귀속하지 않는다.
+				Error = "FBX: Control Point has no positive influence: " + FString(Node->GetName()) + " [" + std::to_string(CP) + "]";
+				return false;
+			}
+			// 동률은 Bone 번호로 정렬하여 TMap 순회 순서와 관계없이 같은 결과를 만든다.
+			std::sort(Sorted.begin(), Sorted.end(), [](const auto& A, const auto& B)
+			{
+				return A.second != B.second ? A.second > B.second : A.first < B.first;
+			});
+			const int32 Used = std::min(MaxBoneInfluences, Sorted.Num());
+			double Sum = 0;
+			for (int32 I = 0; I < Used; ++I) Sum += Sorted[I].second;
+			if (!std::isfinite(Sum)) { Error = "FBX: weight sum overflow: " + FString(Node->GetName()); return false; }
+			FSkinWeight Weight;
+			for (int32 I = 0; I < Used; ++I)
+			{
+				Weight.BoneIndex[I] = static_cast<uint8>(Sorted[I].first);
+				Weight.Weight[I] = static_cast<float>(Sorted[I].second / Sum);
+			}
+			Result[CP] = Weight;
+		}
+		return true;
+	}
+
 	bool IsBoneNode(FbxNode* Node)
 	{
 		const FbxNodeAttribute* Attribute = Node->GetNodeAttribute();
@@ -474,30 +563,8 @@ bool FFbxImporter::ReadMeshData(TArray<FString>& OutWarnings, FString& OutError)
 void FFbxImporter::BuildStaticMesh(FStaticMeshData& OutData) const
 {
 	OutData = {};
-	// 각 Node의 배열을 뒤에 붙이므로 기존 Vertex/Index/Slot 개수만큼 참조 번호를 보정한다.
-	// Index 값에는 VertexBase, Section의 시작에는 IndexBase, Material 번호에는 SlotBase를 더한다.
-	// AABB는 모든 Node의 경계가 들어가도록 합친다.
 	for (const FFbxMeshNodeData& Node : MeshNodes)
-	{
-		const FStaticMeshData& Mesh = Node.Geometry;
-		if (Mesh.Vertices.IsEmpty()) continue;
-		const uint32 VertexBase = static_cast<uint32>(OutData.Vertices.Num());
-		const uint32 IndexBase = static_cast<uint32>(OutData.Indices.Num());
-		const uint32 SlotBase = static_cast<uint32>(OutData.MaterialSlots.Num());
-		
-		if (OutData.Vertices.IsEmpty()) 
-			OutData.AABB = Mesh.AABB;
-		else 
-			OutData.AABB.Expand(Mesh.AABB);
-		
-		OutData.Vertices.Append(Mesh.Vertices);
-		for (uint32 Index : Mesh.Indices) 
-			OutData.Indices.Add(VertexBase + Index);
-
-		OutData.MaterialSlots.Append(Mesh.MaterialSlots);
-		for (const FStaticMeshSection& Section : Mesh.Sections) 
-			OutData.Sections.Add({ IndexBase + Section.StartIndex, Section.IndexCount, SlotBase + Section.MaterialSlotIndex });
-	}
+		AppendGeometry(Node.Geometry, OutData);
 }
 
 
@@ -612,5 +679,48 @@ bool FFbxImporter::ReadSkeletonData(TArray<FString>& OutWarnings, FString& OutEr
 		if (Mesh.bHasSkin) continue;
 		if (const int32* BoneIndex = BoneIndices.Find(Mesh.Node)) Mesh.RigidBoneIndex = *BoneIndex;
 	}
+	return true;
+}
+
+// Node별 Geometry와 Weight를 같은 정점 순서로 합친 뒤, SDK 포인터 없는 엔진 자료를 반환한다.
+bool FFbxImporter::BuildSkeletalMesh(FSkeletalMeshData& OutData, TArray<FString>& OutWarnings, FString& OutError) const
+{
+	OutData = {};
+	OutWarnings.Empty();
+	OutError.clear();
+	if (!Scene || Bones.IsEmpty()) { OutError = "FBX: read skeleton data before building skeletal mesh"; return false; }
+
+	FStaticMeshData Geometry;
+	FSkeletalMeshData Result;
+	for (const FFbxMeshNodeData& Mesh : MeshNodes)
+	{
+		if (!Mesh.bHasSkin && Mesh.RigidBoneIndex < 0) continue;
+		if (Mesh.bHasSkin)
+		{
+			TArray<FSkinWeight> ControlPointWeights;
+			if (!ReadControlPointWeights(Mesh.Node, BoneIndices, ControlPointWeights, OutWarnings, OutError)) return false;
+			// UV/Normal 등으로 분리된 Render Vertex에도 원본 Control Point와 같은 Weight를 전달한다.
+			for (int32 CP : Mesh.ControlPointIndices) Result.SkinWeight.Add(ControlPointWeights[CP]);
+		}
+		else
+		{
+			FSkinWeight Weight;
+			Weight.BoneIndex[0] = static_cast<uint8>(Mesh.RigidBoneIndex);
+			Weight.Weight[0] = 1.0f;
+			for (int32 I = 0; I < Mesh.Geometry.Vertices.Num(); ++I) Result.SkinWeight.Add(Weight);
+		}
+		AppendGeometry(Mesh.Geometry, Geometry);
+	}
+	// Position/Normal/UV는 이미 변환된 상태이므로 기존 Tangent 계산만 적용한다.
+	Geometry.BuildTangentSpace();
+	Result.BindVertices = std::move(Geometry.Vertices);
+	Result.Indices = std::move(Geometry.Indices);
+	Result.Sections = std::move(Geometry.Sections);
+	Result.MaterialSlots = std::move(Geometry.MaterialSlots);
+	Result.BindAABB = Geometry.AABB;
+	Result.Bones = Bones;
+	Result.SourcePath = SourcePath;
+	if (!Result.Validate(OutError)) return false;
+	OutData = std::move(Result);
 	return true;
 }

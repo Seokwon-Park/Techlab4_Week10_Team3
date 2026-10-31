@@ -38,6 +38,8 @@ public:
 	bool ReadSkeletonData(TArray<FString>& OutWarnings, FString& OutError);
 	// 다음 Skeleton/Mesh 재추출, Open/Close/소멸 전까지만 유효하다.
 	const TArray<FBoneInfo>& GetBones() const { return Bones; }
+	// ReadSkeletonData 성공 후 호출한다. SDK 수명과 독립적인 Geometry/Weight/Bone 출력을 만든다.
+	bool BuildSkeletalMesh(FSkeletalMeshData& OutData, TArray<FString>& OutWarnings, FString& OutError) const;
 
 private:
 	void ClearSkeletonData();
