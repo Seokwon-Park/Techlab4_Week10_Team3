@@ -44,5 +44,11 @@ float4 mainPS(VS_OUT Input) : SV_Target
 {
     float4 DecalClip = mul(float4(Input.WorldPosition, 1), DecalVP);
     
-    return float4(DecalClip.x*0.5+0.5, DecalClip.y*0.5+0.5  , 0, 1); // 상수버퍼 제대로 넘어갔나 실험용!
+    float3 NDC = DecalClip.xyz / DecalClip.w;
+    if (abs(NDC.x) > 1 || abs(NDC.y) > 1 || NDC.z < 0 || NDC.z > 1)
+    {
+        discard;
+    }
+    
+    return float4(1, 1, 1, 1); // 상수버퍼 제대로 넘어갔나 실험용!
 }
