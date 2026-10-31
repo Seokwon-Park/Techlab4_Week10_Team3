@@ -125,7 +125,7 @@ void FLuaScriptInstance::ReloadIfChanged(float DeltaTime)
 
 	if (Load(Owner, Path))
 	{
-		FCoroutineScheduler::Get().StopAll(Owner);
+		World->GetCoroutineScheduler().StopAll(Owner);
 		FLuaBindings::ReleaseCallbacks(Owner);
 		HTR_LOG(Info, "[Lua] Hot Reload: {}", Path);
 		Call("OnReload");

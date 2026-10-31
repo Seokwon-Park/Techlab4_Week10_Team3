@@ -814,7 +814,8 @@ namespace
 		Lua.set_function("StartCoroutine",
 			[](sol::this_environment ThisEnv, sol::function Fn)
 			{
-				FCoroutineScheduler::Get().Start(OwnerFromEnv(ThisEnv), Fn);
+				UWorld* World = WorldFromEnv(ThisEnv, "StartCoroutine");
+				World->GetCoroutineScheduler().Start(OwnerFromEnv(ThisEnv), Fn);
 			});
 
 		// C++ 함수가 반환값을 yield 값으로 남기고 멈춘다. 코루틴 밖에서 부르면 Lua 에러
@@ -842,10 +843,8 @@ namespace
 		Lua.set_function("move_to",
 			[](sol::this_environment ThisEnv, const FVector& Target, float Speed)
 			{
-				if (AActor* Owner = OwnerFromEnv(ThisEnv))
-				{
-					FCoroutineScheduler::Get().MoveTo(Owner, Target, Speed);
-				}
+				UWorld* World = WorldFromEnv(ThisEnv, "move_to");
+				World->GetCoroutineScheduler().MoveTo(OwnerFromEnv(ThisEnv), Target, Speed);
 			});
 	}
 

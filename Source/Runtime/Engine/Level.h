@@ -26,7 +26,7 @@ public:
     void AddActor(AActor* Actor);
     void ClearActors();
 
-    using Super::Serialize;   
+    using Super::Serialize;
     virtual void Serialize(FStructuredArchive::FRecord Record) override;
 
     //virtual void Serialize(FArchive& Ar) override; // Save Level 구현예정

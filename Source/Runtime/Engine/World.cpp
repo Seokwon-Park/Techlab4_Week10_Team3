@@ -62,6 +62,11 @@ DECLARE_CYCLE_STAT("Gather Elements", STAT_GatherElements);
 DECLARE_CYCLE_STAT("Gather - LOD", STAT_GatherLOD);
 DECLARE_CYCLE_STAT("Gather - Submit", STAT_GatherSubmit);
 
+UWorld::UWorld()
+	: CoroutineScheduler(*this)
+{
+}
+
 UWorld::~UWorld()
 {
 
@@ -161,7 +166,7 @@ void UWorld::Tick(float RealDeltaTime)
 			SCOPE_CYCLE_COUNTER(STAT_ActorTick);
 			// 모든 Actor를 도는 대신 등록된 Tick 함수만 실행한다
 			TickTaskManager.RunAllTickGroups(DeltaTime);
-			FCoroutineScheduler::Get().Tick(DeltaTime);
+			CoroutineScheduler.Tick(DeltaTime);
 
 			UpdateOverlaps();
 			FLuaBindings::FlushPendingDestroy(this);
@@ -219,6 +224,8 @@ void UWorld::ClearWorld()
 		}
 		Level->ClearActors();
 	}
+	// 액터 EndPlay에서 새로 등록한 작업까지 최종 정리한다.
+	CoroutineScheduler.Reset();
 	// 액터를 지우기 전에 렌더 프록시와 틱 등록부터 푼다. ClearActors는 액터를 delete만 하므로,
 	// 그대로 두면 지워진 컴포넌트를 가리키는 프록시가 FScene에 남아 다음 프레임에 터진다.
 	Scene.RemoveAllLights();
@@ -825,6 +832,7 @@ void UWorld::BeginPlay()
 
 void UWorld::EndPlay()
 {
+	CoroutineScheduler.Reset();
 	bBegunPlay = false;
 	if (PlayerController)
 	{

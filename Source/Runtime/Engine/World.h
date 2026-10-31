@@ -15,6 +15,7 @@
 #include "Asset/LOD/StaticMeshLODSelector.h"
 #include "Engine/EngineTypes.h"
 #include "Render/SceneRenderData.h"
+#include "Script/CoroutineScheduler.h"
 #include "World.generated.h"
 
 class ULevel;
@@ -30,7 +31,7 @@ class UWorld : public UObject
 	GENERATED_BODY()
 
 public:
-	UWorld() = default;
+	UWorld();
 	virtual ~UWorld();
 
 	bool Init();
@@ -97,6 +98,7 @@ public:
 
 	FScene& GetScene() { return Scene; }
 	FTickTaskManager& GetTickTaskManager() { return TickTaskManager; }
+	FCoroutineScheduler& GetCoroutineScheduler() { return CoroutineScheduler; }
 
 	const FRenderStats& GetRenderStats() const { return RenderStats; }
 
@@ -141,6 +143,7 @@ private:
 
 	// 등록된 Tick 함수만 실행한다. Actor보다 먼저 사라져도 남은 함수와의 연결을 스스로 끊는다.
 	FTickTaskManager TickTaskManager;
+	FCoroutineScheduler CoroutineScheduler;
 
 	TQueue<AActor*> BeginPlayList;
 

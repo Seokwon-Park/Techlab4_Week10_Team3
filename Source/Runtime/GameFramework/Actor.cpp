@@ -68,7 +68,7 @@ void AActor::EndPlay()
 		return;
 
 	Script->Call("EndPlay");
-	FCoroutineScheduler::Get().StopAll(this);   // B의 코루틴이 지워질 액터를 다시 깨우지 않게
+	if (World) World->GetCoroutineScheduler().StopAll(this);
 	FLuaBindings::ReleaseCallbacks(this);       // 델리게이트에 걸린 Lua 함수 해제 (단계 8 안전장치 참고)
 	delete Script;
 	Script = nullptr;
