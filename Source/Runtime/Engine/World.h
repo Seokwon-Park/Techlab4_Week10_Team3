@@ -126,6 +126,11 @@ public:
 	void SetCinematicTimeDilation(float InDilation) { CinematicTimeDilation = InDilation; }
 
 private:
+
+	void GameWorldTick(float DeltaTime);
+	void EditorWorldTick(float DeltaTime);
+	void PreviewWorldTick(float DeltaTime);
+
 	EWorldType WorldType = EWorldType::None;
 
 	struct alignas(64) FGatherChunk
