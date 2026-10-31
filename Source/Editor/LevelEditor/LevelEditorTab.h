@@ -7,6 +7,7 @@ class FLevelEditorTab : public IEditorTab
 {
 public:
 	const char* GetTabName() const override { return "LevelEditor"; }
+	bool CanDetach() const override { return false; }
 	FLevelEditorToolbar* GetToolbar() { return &Toolbar; }
 	TArray<TUniquePtr<IEditorPanel>>& GetPanels() { return Panels; }
 
@@ -33,13 +34,14 @@ public:
 
 		if (bUseDockSpace && (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable))
 		{
-			// 기존 DockingSpace 창의 ID를 유지하여 저장된 레이아웃을 재사용한다.
+			// 부모 창이 달라져도 기존 패널 도킹 ID는 유지한다.
+			const ImGuiID DockSpaceId = ImHashStr("EngineDockingSpace", 0, ImHashStr("DockingSpace"));
 			ImGuiDockNodeFlags Flags = bPassthruCentralNode
 				? ImGuiDockNodeFlags_PassthruCentralNode : ImGuiDockNodeFlags_None;
 			if (!bActive)
 				Flags |= ImGuiDockNodeFlags_KeepAliveOnly;
 
-			ImGui::DockSpace(ImGui::GetID("EngineDockingSpace"), ImVec2(0.0f, 0.0f), Flags);
+			ImGui::DockSpace(DockSpaceId, ImVec2(0.0f, 0.0f), Flags);
 		}
 
 		if (bActive)

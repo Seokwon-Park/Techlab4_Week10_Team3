@@ -18,6 +18,9 @@ public:
 		return LevelEditorTab.AddEditorPanel<T>();
 	}
 
+	// 같은 애셋의 중복 생성 여부와 탭의 수명은 호출자가 관리한다.
+	void AddEditorTab(IEditorTab* Tab) { TabContainer.AddTab(Tab); }
+
 	FLevelEditorToolbar* GetToolbar() { return LevelEditorTab.GetToolbar(); }
 
 	TDelegate<> OnNewScene;
