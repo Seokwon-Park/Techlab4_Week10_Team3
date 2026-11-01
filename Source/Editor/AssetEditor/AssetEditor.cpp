@@ -2,9 +2,16 @@
 #include "Editor/AssetEditor/AssetEditor.h"
 #include "Editor/AssetEditor/AssetEditorTab.h"
 #include "Editor/EditorUI/EditorUI.h"
+#include "Editor/HitoriEd/EditorEngine.h"
 
-FAssetEditor::FAssetEditor(FEditorUI& InEditorUI, const FString& InAssetPath)
-	: EditorUI(InEditorUI), AssetPath(InAssetPath)
+FAssetEditor::FAssetEditor(
+	UEditorEngine& InEditorEngine,
+	FEditorUI& InEditorUI,
+	const FString& InAssetPath
+)
+	: EditorEngine(InEditorEngine)
+	, EditorUI(InEditorUI)
+	, AssetPath(InAssetPath)
 {
 }
 
@@ -50,6 +57,7 @@ bool FAssetEditor::Initialize()
 
 void FAssetEditor::Tick(float DeltaTime)
 {
+	PreviewScene.Tick(DeltaTime);
 }
 
 void FAssetEditor::Render()
@@ -65,7 +73,7 @@ void FAssetEditor::Activate()
 	}
 }
 
-void FAssetEditor::RequestClose()
+void FAssetEditor::Close()
 {
 	if (bCloseRequested)
 	{
@@ -99,6 +107,14 @@ void FAssetEditor::Shutdown()
 
 bool FAssetEditor::InitializeResources()
 {
+	if (!PreviewScene.Initialize(&EditorEngine))
+	{
+		return false;
+	}
+
+	// Scene 세팅
+	PreviewScene.Setup();
+
 	return true;
 }
 
@@ -109,4 +125,5 @@ TUniquePtr<IEditorTab> FAssetEditor::CreateTab()
 
 void FAssetEditor::ShutdownResources()
 {
+	PreviewScene.Release();
 }

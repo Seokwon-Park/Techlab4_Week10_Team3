@@ -157,11 +157,13 @@ void UWorld::Tick(float RealDeltaTime)
 	{
 		GameWorldTick(DeltaTime);
 	}
+
 	if (WorldType == EWorldType::Editor)
 	{
 		EditorWorldTick(DeltaTime);
 	}
-	else if (WorldType == EWorldType::EditorPreview)
+	
+	if (WorldType == EWorldType::EditorPreview)
 	{
 		PreviewWorldTick(DeltaTime);
 	}

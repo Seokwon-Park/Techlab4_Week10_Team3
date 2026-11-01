@@ -8,6 +8,7 @@ class UWidget;
 class UPanelWidget;
 class FUIRenderer;
 
+// TODO: UIEditor를 AssetEditor 계열로 통합
 class FUIEditorPanel : public IEditorPanel
 {
 public:

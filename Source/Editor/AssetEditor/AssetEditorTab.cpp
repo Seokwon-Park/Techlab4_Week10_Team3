@@ -11,7 +11,7 @@ FAssetEditorTab::FAssetEditorTab(FAssetEditor& InEditor) : Editor(InEditor)
 
 void FAssetEditorTab::OnCloseRequested()
 {
-	Editor.RequestClose();
+	Editor.Close();
 }
 
 void FAssetEditorTab::DrawMenuBar()
@@ -20,7 +20,7 @@ void FAssetEditorTab::DrawMenuBar()
 	{
 		if (ImGui::MenuItem("Close Editor"))
 		{
-			Editor.RequestClose();
+			Editor.Close();
 		}
 
 		ImGui::EndMenu();

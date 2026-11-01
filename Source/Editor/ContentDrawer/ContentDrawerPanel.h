@@ -19,10 +19,12 @@ public:
 	// .widget 파일을 더블클릭하면 불린다 (UI 에디터가 연다).
 	void SetOpenWidgetCallback(std::function<void(const FString&)> InCallback) { OnOpenWidget = std::move(InCallback); }
 	void SetCreateWidgetCallback(std::function<void(const FString&)> InCallback) { OnCreateWidget = std::move(InCallback); }
+	void SetOpenObjCallback(std::function<void(const FString&)> InCallback) { OnOpenObj = std::move(InCallback); }
 
 private:
 	std::function<void(const FString&)> OnOpenWidget;
 	std::function<void(const FString&)> OnCreateWidget;
+	std::function<void(const FString&)> OnOpenObj;
 	char NewAssetName[64] = "NewWidget";
 	bool bOpenCreateWidget = false;
 

@@ -9,14 +9,10 @@
 #include "Render/SkeletalMesh.h"
 #include <filesystem>
 
-FEditorManager::FEditorManager(FEditorUI& InEditorUI)
-	: EditorUI(InEditorUI)
+FEditorManager::FEditorManager(UEditorEngine& InEditorEngine, FEditorUI& InEditorUI)
+	: EditorEngine(InEditorEngine)
+	, EditorUI(InEditorUI)
 {
-}
-
-FEditorManager::~FEditorManager()
-{
-	Shutdown();
 }
 
 void FEditorManager::OpenEditor(const FString& AssetPath)
@@ -40,7 +36,7 @@ FAssetEditor* FEditorManager::FindEditor(const FString& Path) const
 {
 	for (const auto& Editor : Editors)
 	{
-		if (_stricmp(Editor->GetAssetPath().c_str(), Path.c_str()) == 0)
+		if (Editor->GetAssetPath() == Path)
 		{
 			return Editor.get();
 		}
@@ -49,29 +45,35 @@ FAssetEditor* FEditorManager::FindEditor(const FString& Path) const
 	return nullptr;
 }
 
-void FEditorManager::OpenEditorNow(const FString& AssetPath)
+void FEditorManager::CreateEditor(const FString& AssetPath)
 {
+	// 이미 열려 있는 에디터가 있으면 활성화
 	if (FAssetEditor* Existing = FindEditor(AssetPath))
 	{
 		Existing->Activate();
 		return;
 	}
 
+	// 애셋을 불러온다
 	URenderAsset* Asset = UAssetManager::GetAssetByPath<URenderAsset>(AssetPath);
+	
+	// AssetPath가 제각각인 경우가 있으므로, 실패해도 여러가지 Key로 재시도한다.
 	const FString FilePath = FAssetUtils::ResolveAssetFilePath(AssetPath);
 	if (!Asset && !FilePath.empty())
 	{
-		// 기존 AssetManager는 애셋에 따라 프로젝트 상대 경로로도 등록한다.
+		// 프로젝트 상대 경로로 시도
 		const FString ProjectPath = std::filesystem::path(FilePath)
 			.lexically_relative(std::filesystem::current_path()).generic_string();
 		Asset = UAssetManager::GetAssetByPath<URenderAsset>(ProjectPath);
 		
 		if (!Asset)
 		{
+			// 절대 경로로 시도
 			Asset = UAssetManager::GetAssetByPath<URenderAsset>(FilePath);
 		}
 	}
-
+	
+	// obj 파일은 AssetManager에 등록되지 않으므로 직접 로드
 	if (!Asset && std::filesystem::path(AssetPath).extension() == ".obj")
 	{
 		Asset = UAssetManager::LoadObjStaticMesh(FilePath);
@@ -88,12 +90,12 @@ void FEditorManager::OpenEditorNow(const FString& AssetPath)
 	TUniquePtr<FAssetEditor> Editor = nullptr;
 	if (Asset->IsA<UStaticMesh>())
 	{
-		Editor = MakeUnique<FStaticMeshEditor>(EditorUI, AssetPath);
+		Editor = MakeUnique<FStaticMeshEditor>(EditorEngine, EditorUI, AssetPath);
 	}
 
 	if (Asset->IsA<USkeletalMesh>())
 	{
-		Editor = MakeUnique<FSkeletalMeshEditor>(EditorUI, AssetPath);
+		Editor = MakeUnique<FSkeletalMeshEditor>(EditorEngine, EditorUI, AssetPath);
 	}
 
 	// 지원하지 않는 타입
@@ -137,7 +139,7 @@ void FEditorManager::Render()
 	}
 }
 
-void FEditorManager::ProcessPendingRequests()
+void FEditorManager::LateTick()
 {
 	// ImGui의 분리 창까지 렌더링한 뒤 호출한다. 이번 프레임 텍스처 참조도 끝난 시점이다.
 	for (int32 Index = Editors.Num() - 1; Index >= 0; --Index)
@@ -155,7 +157,7 @@ void FEditorManager::ProcessPendingRequests()
 
 	for (const FString& Path : Requests)
 	{
-		OpenEditorNow(Path);
+		CreateEditor(Path);
 	}
 }
 

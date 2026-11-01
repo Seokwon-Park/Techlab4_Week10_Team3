@@ -1,7 +1,11 @@
 #include "EnginePCH.h"
 #include "Editor/SkeletalMeshEditor/SkeletalMeshEditor.h"
 
-FSkeletalMeshEditor::FSkeletalMeshEditor(FEditorUI& InEditorUI, const FString& InAssetPath)
-	: FAssetEditor(InEditorUI, InAssetPath)
+FSkeletalMeshEditor::FSkeletalMeshEditor(
+	UEditorEngine& InEditorEngine,
+	FEditorUI& InEditorUI,
+	const FString& InAssetPath
+)
+	: FAssetEditor(InEditorEngine, InEditorUI, InAssetPath)
 {
 }

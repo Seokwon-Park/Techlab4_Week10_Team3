@@ -6,6 +6,10 @@
 class FStaticMeshEditor : public FAssetEditor
 {
 public:
-	FStaticMeshEditor(FEditorUI& InEditorUI, const FString& InAssetPath);
+	FStaticMeshEditor(
+		UEditorEngine& InEditorEngine,
+		FEditorUI& InEditorUI,
+		const FString& InAssetPath
+	);
 	const char* GetEditorTypeName() const override { return "StaticMesh"; }
 };

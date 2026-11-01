@@ -6,6 +6,10 @@
 class FSkeletalMeshEditor : public FAssetEditor
 {
 public:
-	FSkeletalMeshEditor(FEditorUI& InEditorUI, const FString& InAssetPath);
+	FSkeletalMeshEditor(
+		UEditorEngine& InEditorEngine,
+		FEditorUI& InEditorUI,
+		const FString& InAssetPath
+	);
 	const char* GetEditorTypeName() const override { return "SkeletalMesh"; }
 };

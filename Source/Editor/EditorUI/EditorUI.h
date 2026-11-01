@@ -33,6 +33,7 @@ public:
 	TDelegate<> OnSaveSceneAs;
 	TDelegate<EFbxImportMode> OnImportFbx;
 	TDelegate<> OnPackageGame;
+
 	// 패키징 중이면 true. Build 메뉴 항목을 비활성화하는 데 쓴다.
 	void SetIsPackagingQuery(std::function<bool()> InQuery) { LevelEditorTab.SetIsPackagingQuery(std::move(InQuery)); }
 

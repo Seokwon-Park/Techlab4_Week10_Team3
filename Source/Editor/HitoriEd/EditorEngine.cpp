@@ -99,7 +99,7 @@ bool UEditorEngine::Init()
 
 	EditorUI = MakeUnique<FEditorUI>();
 	EditorUI->Init();
-	EditorManager = MakeUnique<FEditorManager>(*EditorUI);
+	EditorManager = MakeUnique<FEditorManager>(*this, *EditorUI);
 
 	EditorUI->OnNewScene.AddDynamic(this, &UEditorEngine::CreateNewScene);
 	EditorUI->OnOpenScene.AddDynamic(this, &UEditorEngine::OpenScene);
@@ -179,6 +179,9 @@ bool UEditorEngine::Init()
 	UIEditorPanel = LevelEditorTab.AddPanel<FUIEditorPanel>();
 	ContentDrawerPanel->SetCreateWidgetCallback([this](const FString& Path) { UIEditorPanel->NewAsset(Path); });
 	ContentDrawerPanel->SetOpenWidgetCallback([this](const FString& Path) { UIEditorPanel->OpenAsset(Path); });
+
+	// StaticMesh Editor Callback
+	ContentDrawerPanel->SetOpenObjCallback([this](const FString& Path) { EditorManager->OpenEditor(Path); });
 
 	Outline = MakeUnique<FOutline>();
 
@@ -372,7 +375,7 @@ void UEditorEngine::Tick(const float DeltaTime)
 	RenderViewports();
 	EditorManager->Render();
 	EndFrame();
-	EditorManager->ProcessPendingRequests();
+	EditorManager->LateTick();
 }
 
 void UEditorEngine::PreLoadMap(FWorldContext& Context)

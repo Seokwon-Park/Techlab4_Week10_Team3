@@ -31,7 +31,8 @@ void FEditorUI::OnRender()
 	ImGui::SetNextWindowSize(Viewport->WorkSize);
 	ImGui::SetNextWindowViewport(Viewport->ID);
 
-	ImGuiWindowFlags Flags = ImGuiWindowFlags_MenuBar | ImGuiWindowFlags_NoDocking
+	ImGuiWindowFlags Flags = ImGuiWindowFlags_MenuBar
+		| ImGuiWindowFlags_NoDocking
 		| ImGuiWindowFlags_NoTitleBar
 		| ImGuiWindowFlags_NoCollapse
 		| ImGuiWindowFlags_NoResize
