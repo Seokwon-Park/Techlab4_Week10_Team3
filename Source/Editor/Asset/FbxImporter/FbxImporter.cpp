@@ -278,7 +278,7 @@ namespace
 
 	// 삼각형화가 끝난 Mesh 하나에서 엔진 기준 Geometry/Material과 정점별 Control Point 번호를 추출한다.
 	// Node와 Skin 유무도 보관하여 후속 Skeleton 분류와 Weight 연결에 사용한다. 여기서는 Bone/Weight를 읽지 않는다.
-	bool ReadMeshNode(FbxNode* Node, FbxMesh* Mesh, const std::filesystem::path& Folder, FFbxMeshNodeData& Result, TArray<FString>& Warnings, FString& Error)
+	bool ReadMeshNode(FbxNode* Node, FbxMesh* Mesh, const FbxAMatrix& Global, const std::filesystem::path& Folder, FFbxMeshNodeData& Result, TArray<FString>& Warnings, FString& Error)
 	{
 		Result.Node = Node;
 		Result.bHasSkin = Mesh->GetDeformerCount(FbxDeformer::eSkin) > 0;
@@ -305,15 +305,15 @@ namespace
 		if (Mesh->GetDeformerCount(FbxDeformer::eVertexCache)) Warn(Warnings, "Vertex cache deformation is not imported: " + FString(Node->GetName()));
 
 		// Mesh 자체에 적용되는 Geometric Translation/Rotation/Scale을 G 행렬로 만든다.
-		// Node의 Global Transform W와 결합해 정점 위치에 굽고, Normal에는 그 결합 행렬의 역전치를 적용한다.
+		// 전달받은 현재 또는 Bind Global과 결합해 정점을 굽고, Normal에는 결합 행렬의 역전치를 적용한다.
 		FbxAMatrix Geometric;
 		Geometric.SetT(Node->GetGeometricTranslation(FbxNode::eSourcePivot));
 		Geometric.SetR(Node->GetGeometricRotation(FbxNode::eSourcePivot));
 		Geometric.SetS(Node->GetGeometricScaling(FbxNode::eSourcePivot));
 		
-		// SDK는 열벡터이므로 엔진의 p*G*W에 해당하는 행렬은 W*G다.
-		const FbxAMatrix Total = Node->EvaluateGlobalTransform() * Geometric;
-		// 출력 때 적용하는 Y 반전 C의 determinant는 -1이다. 최종 G*W*C 기준으로 검사한다.
+		// SDK는 열벡터이므로 엔진의 p*G*M에 해당하는 행렬은 M*G다.
+		const FbxAMatrix Total = Global * Geometric;
+		// 출력 때 적용하는 Y 반전 C의 determinant는 -1이다. 최종 G*M*C 기준으로 검사한다.
 		const double FinalDeterminant = -Total.Determinant();
 		if (!std::isfinite(FinalDeterminant) || FinalDeterminant == 0) { Error = "singular/non-finite mesh transform"; return false; }
 		
@@ -547,7 +547,7 @@ bool FFbxImporter::ReadMeshData(TArray<FString>& OutWarnings, FString& OutError)
 		}
 		// Triangulate가 기존 Mesh를 교체할 수 있으므로 Node에서 다시 얻는다.
 		FFbxMeshNodeData Result;
-		if (!ReadMeshNode(Node, Node->GetMesh(), PathOf(SourcePath).parent_path(), Result, OutWarnings, OutError))
+		if (!ReadMeshNode(Node, Node->GetMesh(), Node->EvaluateGlobalTransform(), PathOf(SourcePath).parent_path(), Result, OutWarnings, OutError))
 		{
 			OutError = "FBX: " + FString(Node->GetName()) + ": " + OutError;
 			return false;
@@ -573,6 +573,7 @@ void FFbxImporter::ClearSkeletonData()
 {
 	Bones.Empty();
 	BoneIndices.Empty();
+	RigidBindMeshes.Empty();
 	for (FFbxMeshNodeData& Mesh : MeshNodes) Mesh.RigidBoneIndex = -1;
 }
 
@@ -672,14 +673,35 @@ bool FFbxImporter::ReadSkeletonData(TArray<FString>& OutWarnings, FString& OutEr
 		if (!ResultIndices.Contains(Cluster->GetLink())) { OutError = "FBX: Cluster Link is outside the selected bone hierarchy"; return false; }
 	}
 
-	Bones = std::move(ResultBones);
-	BoneIndices = std::move(ResultIndices);
-	// Bone 계층의 Skin 없는 Mesh에 자기 Node의 Bone 번호를 연결한다.
-	for (FFbxMeshNodeData& Mesh : MeshNodes)
+	// 현재 Global 기준 자료는 Static 출력에 남기고, rigid만 선택된 Bind Global로 다시 읽는다.
+	// 모든 추출이 성공하기 전에는 멤버를 갱신하지 않아 실패 후 부분 결과가 남지 않는다.
+	TMap<FbxNode*, FFbxMeshNodeData> ResultRigidMeshes;
+	constexpr double RigidPoseTolerance = 1e-6;
+	for (const FFbxMeshNodeData& Mesh : MeshNodes)
 	{
 		if (Mesh.bHasSkin) continue;
-		if (const int32* BoneIndex = BoneIndices.Find(Mesh.Node)) Mesh.RigidBoneIndex = *BoneIndex;
+		const int32* BoneIndex = ResultIndices.Find(Mesh.Node);
+		if (!BoneIndex) continue;
+		const FbxAMatrix& Bind = BindGlobals[*BoneIndex];
+		const FbxAMatrix Current = Mesh.Node->EvaluateGlobalTransform();
+		double MaxDifference = 0;
+		for (int Row = 0; Row < 4; ++Row)
+			for (int Column = 0; Column < 4; ++Column) MaxDifference = std::max(MaxDifference, std::abs(Current.Get(Row, Column) - Bind.Get(Row, Column)));
+		if (MaxDifference > RigidPoseTolerance) Warn(OutWarnings, "FBX: rigid mesh baked at bind pose (differs from current pose): " + FString(Mesh.Node->GetName()));
+		FFbxMeshNodeData Result;
+		if (!ReadMeshNode(Mesh.Node, Mesh.Node->GetMesh(), Bind, PathOf(SourcePath).parent_path(), Result, OutWarnings, OutError))
+		{
+			OutError = "FBX: " + FString(Mesh.Node->GetName()) + ": " + OutError;
+			return false;
+		}
+		Result.RigidBoneIndex = *BoneIndex;
+		ResultRigidMeshes.Add(Mesh.Node, std::move(Result));
 	}
+	Bones = std::move(ResultBones);
+	BoneIndices = std::move(ResultIndices);
+	RigidBindMeshes = std::move(ResultRigidMeshes);
+	for (FFbxMeshNodeData& Mesh : MeshNodes)
+		if (const FFbxMeshNodeData* Rigid = RigidBindMeshes.Find(Mesh.Node)) Mesh.RigidBoneIndex = Rigid->RigidBoneIndex;
 	return true;
 }
 
@@ -693,8 +715,10 @@ bool FFbxImporter::BuildSkeletalMesh(FSkeletalMeshData& OutData, TArray<FString>
 
 	FStaticMeshData Geometry;
 	FSkeletalMeshData Result;
-	for (const FFbxMeshNodeData& Mesh : MeshNodes)
+	for (const FFbxMeshNodeData& SourceMesh : MeshNodes)
 	{
+		const FFbxMeshNodeData* Rigid = RigidBindMeshes.Find(SourceMesh.Node);
+		const FFbxMeshNodeData& Mesh = Rigid ? *Rigid : SourceMesh;
 		if (!Mesh.bHasSkin && Mesh.RigidBoneIndex < 0) continue;
 		if (Mesh.bHasSkin)
 		{

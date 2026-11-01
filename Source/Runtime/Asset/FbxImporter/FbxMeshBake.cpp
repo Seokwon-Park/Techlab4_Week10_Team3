@@ -7,7 +7,7 @@
 namespace
 {
 	constexpr uint32 Magic = 0x58424648; // HFBX, little endian
-	constexpr uint32 Version = 1;
+	constexpr uint32 Version = 2;
 	static_assert(sizeof(FVertex) == 64 && sizeof(FSkinWeight) == 20);
 
 	std::filesystem::path FilePath(const FString& Path)
@@ -155,13 +155,19 @@ bool FFbxMeshBake::Read(const FString& Path, FFbxBakedMesh& OutData, FString& Ou
 	FReader In(Path);
 	FFbxBakedMesh D;
 	uint32 M = 0, V = 0;
-	if (!In.Pod(M) || M != Magic || !In.Pod(V) || V != Version || !In.Pod(D.Kind) || (D.Kind != EFbxMeshKind::Static && D.Kind != EFbxMeshKind::Skeletal)
+	if (!In.Pod(M) || M != Magic || !In.Pod(V)) { OutError = "FBX binary: invalid header: " + Path; return false; }
+	if (V != Version)
+	{
+		OutError = "FBX binary: unsupported version " + std::to_string(V) + " (expected " + std::to_string(Version) + "); reimport the source FBX: " + Path;
+		return false;
+	}
+	if (!In.Pod(D.Kind) || (D.Kind != EFbxMeshKind::Static && D.Kind != EFbxMeshKind::Skeletal)
 		|| !In.Pod(D.Source.Mode) || (D.Source.Mode != EFbxImportMode::Static && D.Source.Mode != EFbxImportMode::Skeletal)
 		|| !In.Pod(D.Source.Outputs) || D.Source.Outputs == 0 || D.Source.Outputs > 3 || !(D.Source.Outputs & static_cast<uint32>(D.Kind))
 		|| (D.Source.Mode == EFbxImportMode::Static && D.Source.Outputs != static_cast<uint32>(EFbxMeshKind::Static))
 		|| !In.String(D.Source.Path) || !In.Pod(D.Source.ModifiedTime) || !In.Pod(D.Source.Size))
 	{
-		OutError = "FBX binary: invalid header/version: " + Path;
+		OutError = "FBX binary: invalid header: " + Path;
 		return false;
 	}
 	if (!ReadPayload(In, D) || !FinitePayload(D)) { OutError = "FBX binary: invalid/truncated payload: " + Path; return false; }

@@ -23,7 +23,7 @@ struct FFbxBakedMesh
 	FSkeletalMeshData SkeletalMesh;
 };
 
-// SDK와 독립적인 엔진 자료만 읽고 쓴다. 형식/필드가 바뀌면 Version을 올린다.
+// SDK와 독립적인 엔진 자료만 읽고 쓴다. 형식/필드 또는 구운 결과의 의미가 바뀌면 Version을 올린다.
 class FFbxMeshBake
 {
 public:
