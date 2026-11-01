@@ -90,12 +90,14 @@ void FEditorManager::CreateEditor(const FString& AssetPath)
 	TUniquePtr<FAssetEditor> Editor = nullptr;
 	if (Asset->IsA<UStaticMesh>())
 	{
-		Editor = MakeUnique<FStaticMeshEditor>(EditorEngine, EditorUI, AssetPath);
+		UStaticMesh* MeshAsset = Cast<UStaticMesh>(Asset);
+		Editor = MakeUnique<FStaticMeshEditor>(EditorEngine, EditorUI, AssetPath, *MeshAsset);
 	}
 
 	if (Asset->IsA<USkeletalMesh>())
 	{
-		Editor = MakeUnique<FSkeletalMeshEditor>(EditorEngine, EditorUI, AssetPath);
+		USkeletalMesh* MeshAsset = Cast<USkeletalMesh>(Asset);
+		Editor = MakeUnique<FSkeletalMeshEditor>(EditorEngine, EditorUI, AssetPath/*, *MeshAsset*/);
 	}
 
 	// 지원하지 않는 타입

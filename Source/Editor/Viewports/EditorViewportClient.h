@@ -15,6 +15,8 @@
 class UWorld;
 class FGizmo;
 class AActor;
+class FPreviewScene;
+struct FBoxSphereBounds;
 
 
 // 뷰포트 투영 타입
@@ -42,11 +44,12 @@ enum class EViewportMode
 class FEditorViewportClient : public FViewportClient {
 public:
 	FEditorViewportClient();
+	explicit FEditorViewportClient(FPreviewScene& InPreviewScene);
 	virtual ~FEditorViewportClient() override = default;
 
 	// 월드 조회 및 설정
-	virtual UWorld* GetWorld() const override { return World; }
-	void SetWorld(UWorld* InWorld) { if (World != InWorld) RenderData.ResetScene(); World = InWorld; }
+	virtual UWorld* GetWorld() const override;
+	void SetWorld(UWorld* InWorld);
 
 	// 입력 이벤트
 	virtual void MouseMove(FViewport* Viewport, int32 X, int32 Y) override;
@@ -102,6 +105,7 @@ public:
 
 	// 카메라 전방 벡터
 	FVector GetViewForward() const;
+	void FocusOnBounds(const FBoxSphereBounds& Bounds);
 
 	// 씬 뷰 생성
 	FSceneView CalcSceneView(const FRect& InViewRect) const;
@@ -142,6 +146,8 @@ public:
 	void Resize(uint32 InWidth, uint32 InHeight);
 
 protected:
+	// 프리뷰 장면은 클라이언트보다 오래 살아 있어야 합니다.
+	FPreviewScene* PreviewScene = nullptr;
 	UWorld* World = nullptr;
 	int32 ViewIndex = 0;
 	ELevelViewportType ViewportType = ELevelViewportType::Perspective;

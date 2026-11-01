@@ -16,6 +16,8 @@ void FAssetEditorTab::OnCloseRequested()
 
 void FAssetEditorTab::DrawMenuBar()
 {
+	// 기본 Editor Menu Bar.
+
 	if (ImGui::BeginMenu("Editor"))
 	{
 		if (ImGui::MenuItem("Close Editor"))

@@ -14,6 +14,7 @@ public:
 	bool Initialize(class UEditorEngine* InEditorEngine);
 
 	void Tick(float DeltaTime);
+	class UWorld* GetWorld() const;
 
 	// PreviewScene을 정리합니다.
 	void Release();
@@ -33,5 +34,6 @@ private:
 	class UEditorEngine* EditorEngine = nullptr;
 	struct FWorldContext* WorldContext = nullptr;
 	bool bInitialized = false;
+	bool bEnvironmentCreated = false;
 
 };

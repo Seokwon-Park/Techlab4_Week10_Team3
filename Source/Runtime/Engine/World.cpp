@@ -21,6 +21,7 @@
 #include "Components/ExponentialHeightFogComponent.h"
 
 #include "Components/StaticMeshComponent.h"
+#include "Components/SkinnedMeshComponent.h"
 #include "Asset/LOD/StaticMeshLODSelector.h"
 
 #include "Math/Frustum.h"
@@ -167,6 +168,12 @@ void UWorld::Tick(float RealDeltaTime)
 	{
 		PreviewWorldTick(DeltaTime);
 	}
+
+	// 월드 Tick에서 변경된 변환과 바운드를 렌더링 전에 반영합니다.
+	{
+		SCOPE_CYCLE_COUNTER(STAT_UpdateAllTransforms);
+		Scene.UpdateAllTransforms();
+	}
 }
 
 void UWorld::GameWorldTick(float DeltaTime)
@@ -222,10 +229,12 @@ void UWorld::EditorWorldTick(float DeltaTime)
 		{
 			continue;
 		}
+
 		if (Comp->GetParticlesForView().IsEmpty())
 		{
 			Comp->SetParticles(10);
 		}
+
 		Comp->TickComponent(DeltaTime);
 	}
 
@@ -236,13 +245,24 @@ void UWorld::EditorWorldTick(float DeltaTime)
 		{
 			continue;
 		}
+
 		Comp->UpdateInEditor();
 	}
 }
 
 void UWorld::PreviewWorldTick(float DeltaTime)
 {
-	// EditorPreview World에서 실행
+	// 스킨드 메시 컴포넌트의 본이 수정되면 갱신되어야 함
+	for (TObjectIterator<USkinnedMeshComponent> Comp; Comp; ++Comp)
+	{
+		if (!Comp || !Comp->IsRegistered() || Comp->GetWorld() != this)
+		{
+			continue;
+		}
+
+		Comp->TickComponent(DeltaTime);
+	}
+
 }
 
 void UWorld::ClearWorld()

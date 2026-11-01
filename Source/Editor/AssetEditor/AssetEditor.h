@@ -13,6 +13,11 @@ public:
 		const FString& InAssetPath
 	);
 	virtual ~FAssetEditor();
+	
+	
+	////////////////////////////////////////////////////////////
+	// 에디터 공통 인터페이스
+	////////////////////////////////////////////////////////////
 
 	// Editor를 초기화합니다.
 	bool Initialize();
@@ -37,18 +42,18 @@ public:
 	// Getter
 	////////////////////////////////////////////////////////////
 
+	virtual const char* GetEditorTypeName() const = 0;
 	const FString& GetAssetPath() const { return AssetPath; }
 	FPreviewScene& GetPreviewScene() { return PreviewScene; }
 
 	bool IsCloseRequested() const { return bCloseRequested; }
-	virtual const char* GetEditorTypeName() const = 0;
 
 protected:
-	// 리소스를 초기화합니다.
-	virtual bool InitializeResources();
-
 	// 이 에디터에 연결된 탭을 생성합니다.
 	virtual TUniquePtr<class IEditorTab> CreateTab();
+
+	// 리소스를 초기화합니다.
+	virtual bool InitializeResources();
 	
 	// 리소스를 정리합니다.
 	virtual void ShutdownResources();

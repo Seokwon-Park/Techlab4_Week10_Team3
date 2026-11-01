@@ -5,7 +5,8 @@
 
 #include "Runtime/Components/DirectionalLightComponent.h"
 #include "Runtime/Components/SkyLightComponent.h"
-
+#include "Components/StaticMeshComponent.h"
+#include "Asset/AssetManager.h"
 #include "Runtime/GameFramework/Actor.h"
 #include "Runtime/Components/ActorComponent.h"
 
@@ -23,9 +24,6 @@ bool FPreviewScene::Initialize(UEditorEngine* InEditorEngine)
 
 	EditorEngine = InEditorEngine;
 
-	// Create World Context
-	FWorldContext& InWorldContext = EditorEngine->CreateNewWorldContext(EWorldType::EditorPreview);
-
 	// Create World Instance
 	UWorld* World = UWorld::CreateWorld(EWorldType::EditorPreview, true);
 	if (!World)
@@ -33,26 +31,31 @@ bool FPreviewScene::Initialize(UEditorEngine* InEditorEngine)
 		return false;
 	}
 
-	InWorldContext.SetCurrentWorld(World);
+	// Create World Context
+	WorldContext = &EditorEngine->CreateNewWorldContext(EWorldType::EditorPreview);
+	WorldContext->SetCurrentWorld(World);
 
-	WorldContext = &InWorldContext;
 	bInitialized = true;
 	
 	return true;
 }
 
+UWorld* FPreviewScene::GetWorld() const
+{
+	return WorldContext ? WorldContext->World() : nullptr;
+}
+
 void FPreviewScene::Tick(float DeltaTime)
 {
-	if (WorldContext)
+	if (UWorld* World = GetWorld())
 	{
-		WorldContext->World()->Tick(DeltaTime);
+		World->Tick(DeltaTime);
 	}
 }
 
 void FPreviewScene::Release()
 {
 	// 삭제는 초기화의 역순
-
 
 	// Destroy World Context & Instance
 	if (WorldContext)
@@ -63,6 +66,8 @@ void FPreviewScene::Release()
 	}
 
 	bInitialized = false;
+	bEnvironmentCreated = false;
+	EditorEngine = nullptr;
 }
 
 AActor* FPreviewScene::AddActor(UClass* ActorClass)
@@ -101,6 +106,7 @@ UActorComponent* FPreviewScene::AddComponent(UClass* ComponentClass)
 	UActorComponent* Component = Actor->AddComponent(ComponentClass, "Preview Component");
 	if (!Component)
 	{
+		GetWorld()->DestroyActor(Actor);
 		return nullptr;
 	}
 
@@ -109,7 +115,7 @@ UActorComponent* FPreviewScene::AddComponent(UClass* ComponentClass)
 
 void FPreviewScene::Setup()
 {
-	if (!WorldContext)
+	if (!WorldContext || bEnvironmentCreated)
 	{
 		return;
 	}
@@ -129,6 +135,8 @@ void FPreviewScene::Setup()
 	{
 		return;
 	}
+	bEnvironmentCreated = true;
+	SystemActor->SetActorEnableCollision(false);
 
 	// Setup Directional Light
 	{
@@ -139,8 +147,11 @@ void FPreviewScene::Setup()
 
 		auto DirectionalLightComponent = Cast<UDirectionalLightComponent>(_DirectionalLightComponent);
 
-		DirectionalLightComponent->SetIntensity(0.5f);
-		DirectionalLightComponent->SetRelativeRotation(FVector{0.0f, 25.0f, 35.0f});
+		if (DirectionalLightComponent)
+		{
+			DirectionalLightComponent->SetIntensity(0.5f);
+			DirectionalLightComponent->SetRelativeRotation(FVector{0.0f, 25.0f, 35.0f});
+		}
 	}
 
 
@@ -152,7 +163,10 @@ void FPreviewScene::Setup()
 		);
 
 		auto SkyLightComponent = Cast<USkyLightComponent>(_SkyLightComponent);
-		SkyLightComponent->SetIntensity(0.25f);
+		if (SkyLightComponent)
+		{
+			SkyLightComponent->SetIntensity(0.25f);
+		}
 	}
 
 

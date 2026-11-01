@@ -69,6 +69,7 @@ public:
 	void RenderGameFrame(FGameViewportClient* GameClient, const FSceneView& SceneView, const FSceneRenderOptions& RenderOptions, FSceneRenderer& SceneRenderer, bool bIsSIEMode = false);
 	// 네 View 결과와 ImGui를 메인 Swapchain 백버퍼에 합성한다. Present는 FEngineLoop가 한다.
 	void PresentFrame();
+	void RenderPreviewViewport(FEditorViewportClient& ViewClient);
 	void DeleteActor(AActor* Actor);
 	void DeleteComponent(UActorComponent* Component);
 

@@ -993,6 +993,46 @@ void UEditorEngine::RenderGameFrame(FGameViewportClient* GameClient, const FScen
 	if (!bRendered) return;
 }
 
+void UEditorEngine::RenderPreviewViewport(FEditorViewportClient& ViewClient)
+{
+	UWorld* World = ViewClient.GetWorld();
+
+	// 렌더러가 없음
+	if (!Renderer)
+	{
+		return;
+	}
+
+	// EditorViewportClient에 월드가 없음
+	if (!World)
+	{
+		return;
+	}
+
+	// 월드 타입이 EditorPreview가 아님
+	if (World->GetWorldType() != EWorldType::EditorPreview)
+	{
+		return;
+	}
+
+	// SceneView와 Option 생성
+	FSceneView View = ViewClient.CalcSceneView();
+	FSceneRenderOptions Options
+	{
+		.bEnableFog = false,
+		.bEnableFXAA = true,
+		.bShowVignette = false,
+		.bShowCameraOverlay = false,
+	};
+
+	// SceneRenderer 생성 및 초기화
+	FSceneRenderer SceneRenderer(World, View, ViewClient.GetRenderData());
+	SceneRenderer.InitViews(Renderer, Options);
+
+	// PreviewViewport 그리기
+	SceneRenderer.Render(Renderer, ViewClient.GetViewTargets(), Options);
+}
+
 bool UEditorEngine::RenderScene(FSceneViewTargets& Targets, const FSceneView& SceneView,
 	FSceneRenderer& SceneRenderer, UWorld* TargetWorld, const FSceneRenderOptions& Options,
 	const std::function<void(FSceneOverlayCallbacks&)>& BuildOverlays)
