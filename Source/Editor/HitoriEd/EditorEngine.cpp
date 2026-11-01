@@ -105,6 +105,7 @@ bool UEditorEngine::Init()
 	EditorUI->OnOpenScene.AddDynamic(this, &UEditorEngine::OpenScene);
 	EditorUI->OnSaveScene.AddDynamic(this, &UEditorEngine::SaveCurrentScene);
 	EditorUI->OnSaveSceneAs.AddDynamic(this, &UEditorEngine::SaveSceneAs);
+	EditorUI->OnImportFbx.Add([this](EFbxImportMode Mode) { FEditorFileUtils::ImportFbx(Mode); });
 	EditorUI->OnPackageGame.Add([this]() { Packager.Start("Release"); });
 	EditorUI->SetIsPackagingQuery([this]() { return Packager.IsRunning(); });
 

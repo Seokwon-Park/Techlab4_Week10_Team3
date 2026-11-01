@@ -3,8 +3,11 @@
 #include "Core/Delegate/Delegate.h"
 #include "Editor/EditorUI/EditorTabContainer.h"
 #include "Editor/LevelEditor/LevelEditorTab.h"
+#include "Runtime/Asset/FbxImporter/FbxMeshBake.h"
 
 #include <functional>
+
+enum class EFbxImportMode : uint32;
 
 class FEditorUI
 {
@@ -28,6 +31,7 @@ public:
 	TDelegate<> OnOpenScene;
 	TDelegate<> OnSaveScene;
 	TDelegate<> OnSaveSceneAs;
+	TDelegate<EFbxImportMode> OnImportFbx;
 	TDelegate<> OnPackageGame;
 	// 패키징 중이면 true. Build 메뉴 항목을 비활성화하는 데 쓴다.
 	void SetIsPackagingQuery(std::function<bool()> InQuery) { LevelEditorTab.SetIsPackagingQuery(std::move(InQuery)); }

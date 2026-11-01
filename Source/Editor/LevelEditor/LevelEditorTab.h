@@ -3,6 +3,7 @@
 #include "Core/Delegate/Delegate.h"
 #include "Editor/EditorUI/EditorTab.h"
 #include "Editor/LevelEditor/LevelEditorToolbar.h"
+#include "Runtime/Asset/FbxImporter/FbxMeshBake.h"
 
 class FLevelEditorTab : public IEditorTab
 {
@@ -15,6 +16,7 @@ public:
 	TDelegate<> OnOpenScene;
 	TDelegate<> OnSaveScene;
 	TDelegate<> OnSaveSceneAs;
+	TDelegate<EFbxImportMode> OnImportFbx;
 	TDelegate<> OnPackageGame;
 	void SetIsPackagingQuery(std::function<bool()> InQuery) { IsPackaging = std::move(InQuery); }
 

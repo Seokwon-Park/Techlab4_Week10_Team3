@@ -1,7 +1,6 @@
 #include "EnginePCH.h"
 #include "Editor/EditorUI/EditorUI.h"
 
-
 bool FEditorUI::Init(bool bInUseDockSpace, bool bInPassthruCentralNode)
 {
 	bUseDockSpace = bInUseDockSpace;
@@ -12,8 +11,11 @@ bool FEditorUI::Init(bool bInUseDockSpace, bool bInPassthruCentralNode)
 	LevelEditorTab.OnOpenScene.Add([this]() { OnOpenScene.Broadcast(); });
 	LevelEditorTab.OnSaveScene.Add([this]() { OnSaveScene.Broadcast(); });
 	LevelEditorTab.OnSaveSceneAs.Add([this]() { OnSaveSceneAs.Broadcast(); });
+	LevelEditorTab.OnImportFbx.Add([this](EFbxImportMode Mode) { OnImportFbx.Broadcast(Mode); });
 	LevelEditorTab.OnPackageGame.Add([this]() { OnPackageGame.Broadcast(); });
+
 	TabContainer.AddTab(&LevelEditorTab);
+
 	return true;
 }
 

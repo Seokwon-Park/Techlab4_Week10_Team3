@@ -1,5 +1,6 @@
 #include "EnginePCH.h"
 #include "Editor/LevelEditor/LevelEditorTab.h"
+#include "Asset/FbxImporter/FbxMeshBake.h"
 
 void FLevelEditorTab::DrawMenuBar()
 {
@@ -16,6 +17,15 @@ void FLevelEditorTab::DrawMenuBar()
 
 		if (ImGui::MenuItem("Save")) { OnSaveScene.Broadcast(); }
 		if (ImGui::MenuItem("Save As...")) { OnSaveSceneAs.Broadcast(); }
+
+		ImGui::Separator();
+
+		if (ImGui::BeginMenu("Import FBX"))
+		{
+			if (ImGui::MenuItem("Static Mesh...")) { OnImportFbx.Broadcast(EFbxImportMode::Static); }
+			if (ImGui::MenuItem("Skeletal Mesh...")) { OnImportFbx.Broadcast(EFbxImportMode::Skeletal); }
+			ImGui::EndMenu();
+		}
 
 		ImGui::EndMenu();
 	}

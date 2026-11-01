@@ -17,6 +17,13 @@ workspace "Hitori"
 
 outputdir = "%{cfg.buildcfg}-%{cfg.system}-%{cfg.architecture}"
 
+-- SlnGenerator가 저장된 사용자 환경 변수를 읽어 이 프로세스에 전달한다.
+local FbxSdkRoot = os.getenv("FBX_SDK_ROOT")
+if not FbxSdkRoot or FbxSdkRoot == "" then
+	error("FBX_SDK_ROOT is missing. Run Setup/SetupFbxSdk.bat, then SlnGenerator.bat.")
+end
+FbxSdkRoot = path.translate(FbxSdkRoot, "/")
+
 IncludeDir = {}
 IncludeDir["ImGui"] = "Source/ThirdParty/ImGui"
 IncludeDir["stb"]   = "Source/ThirdParty/stb"
@@ -217,6 +224,20 @@ project "HitoriEditor"
 	location "Source/Editor"
 	kind     "WindowedApp"
 	CommonSettings()
+
+	-- FBX 해석은 Editor에서 수행하고 Runtime/Game은 SDK에 의존하지 않는다.
+	includedirs { path.join(FbxSdkRoot, "include") }
+	defines { "FBXSDK_SHARED" }
+	links { "libfbxsdk.lib" }
+
+	for _, Config in ipairs({ "Debug", "Release", "Shipping", "ObjViewer", "Benchmark", "Benchmark_Debug" }) do
+		local SdkConfig = (Config == "Debug" or Config == "Benchmark_Debug") and "debug" or "release"
+		local SdkLibDir = path.join(FbxSdkRoot, "lib/x64", SdkConfig)
+		filter ("configurations:" .. Config)
+			libdirs { SdkLibDir }
+			postbuildcommands { '{COPYFILE} "' .. path.join(SdkLibDir, "libfbxsdk.dll") .. '" "%{cfg.targetdir}"' }
+	end
+	filter {}
 
 	pchheader "EnginePCH.h"
 	pchsource "Source/Editor/EditorPCH.cpp"
