@@ -24,16 +24,15 @@ void FStaticMeshEditorPanel::OnRender()
 	ImGuiWindowClass WindowClass;
 	WindowClass.ClassId = DockClassId;
 	WindowClass.DockingAllowUnclassed = false;
+	WindowClass.DockNodeFlagsOverrideSet = ImGuiDockNodeFlags_NoCloseButton;
 	ImGui::SetNextWindowClass(&WindowClass);
 	ImGui::SetNextWindowSize(ImVec2(480.0f, 320.0f), ImGuiCond_FirstUseEver);
 
-	bool bOpen = IsOpen();
-	if (ImGui::Begin(GetWindowName(), &bOpen) && bOpen)
+	if (ImGui::Begin(GetWindowName()))
 	{
 		DrawContent();
 	}
 	ImGui::End();
-	SetOpen(bOpen);
 }
 
 bool FStaticMeshEditorPanel::IsDetached(ImGuiID DockSpaceId) const
