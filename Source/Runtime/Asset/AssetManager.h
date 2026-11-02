@@ -17,6 +17,7 @@ enum class EAssetType
 
 class UStaticMesh;
 class USoundWave;
+struct FSkeletalMaterialSlot;
 
 namespace fs = std::filesystem;
 
@@ -78,6 +79,7 @@ public:
 	// 로드된 OBJ 스태틱 메시(키가 .obj로 끝나는 것)마다 부른다. 기본 도형·기즈모 메시는 제외된다.
 	static void ForEachObjStaticMesh(const std::function<void(const FString& Key, UStaticMesh& Mesh)>& Func);
 	static bool BuildMaterialsFromSlots(const TArray<FStaticMaterialSlot>& Slots, TArray<UMaterial*>& OutMaterials);
+	static bool BuildMaterialsFromSlots(const TArray<FSkeletalMaterialSlot>& Slots, TArray<UMaterial*>& OutMaterials);
 
 private:
 	TMap<FString, FString> AssetPathMap;

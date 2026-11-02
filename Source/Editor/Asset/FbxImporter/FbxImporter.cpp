@@ -125,7 +125,14 @@ namespace
 		for (int Child = 0; Child < Node->GetChildCount(); ++Child) CollectBoneNodes(Node->GetChild(Child), Nodes);
 	}
 
-	// Bind Pose의 행렬은 SDK 계약상 Global이다. 없으면 Cluster Link, 현재 Global 순으로 사용한다.
+	// 이 Bone의 Bind Global을 Bind Pose → Cluster Link → 현재 Global 순서로 찾는다.
+	// "Bone missing from Bind Pose"는 파일의 모든 Bind Pose에서 이 Node를 찾지 못했다는 뜻이다.
+	// 파일 전체에 Bind Pose가 없거나 Import에 실패했다는 뜻은 아니다. Weight 없는 IK/보조 Bone도
+	// Skeleton에 포함하므로, 이런 Bone의 Bind Pose 항목이 원본에 없으면 같은 경고가 발생할 수 있다.
+	// Bind Pose에 있으면 저장된 Global 행렬을 사용한다. 없으면 경고를 남긴 뒤 이 Node를 Link로
+	// 참조하는 Cluster의 TransformLinkMatrix를 사용하고, 그런 Cluster도 없으면 현재 Global을 사용한다.
+	// 현재 Global을 사용하는 경우 원래 Bind 시점의 자세를 복구하는 것은 아니며, 현재 자세를 Bind로 삼는다.
+	// Bone 자체는 제외하지 않는다. 호출부가 반환된 Global로 Local Bind와 Inverse Bind를 구성한다.
 	FbxAMatrix ReadBindGlobal(FbxScene* Scene, FbxNode* Node, const TArray<FbxCluster*>& Clusters, TArray<FString>& Warnings)
 	{
 		FbxAMatrix Global;
@@ -740,8 +747,12 @@ bool FFbxImporter::BuildSkeletalMesh(FSkeletalMeshData& OutData, TArray<FString>
 	Geometry.BuildTangentSpace();
 	Result.BindVertices = std::move(Geometry.Vertices);
 	Result.Indices = std::move(Geometry.Indices);
-	Result.Sections = std::move(Geometry.Sections);
-	Result.MaterialSlots = std::move(Geometry.MaterialSlots);
+	Result.Sections.Reserve(Geometry.Sections.Num());
+	for (const FStaticMeshSection& Section : Geometry.Sections)
+		Result.Sections.Add({ Section.StartIndex, Section.IndexCount, Section.MaterialSlotIndex });
+	Result.MaterialSlots.Reserve(Geometry.MaterialSlots.Num());
+	for (FStaticMaterialSlot& Slot : Geometry.MaterialSlots)
+		Result.MaterialSlots.Add({ std::move(Slot.Name), Slot.BaseColor, std::move(Slot.DiffuseTexturePath), std::move(Slot.NormalTexturePath) });
 	Result.BindAABB = Geometry.AABB;
 	Result.Bones = Bones;
 	Result.SourcePath = SourcePath;
@@ -939,36 +950,40 @@ bool FFbxImporter::ImportToAssets(const FString& Path, EFbxImportMode Mode, FFbx
 		for (auto& Output : Outputs)
 		{
 			Output.Source = Source;
-			auto& Slots = Output.Kind == EFbxMeshKind::Static ? Output.StaticMesh.MaterialSlots : Output.SkeletalMesh.MaterialSlots;
-			for (auto& Slot : Slots) for (FString* Texture : { &Slot.DiffuseTexturePath, &Slot.NormalTexturePath })
+			auto CopyTextures = [&](auto& Slots)
 			{
-				if (Texture->empty()) continue;
-				const auto Original = std::filesystem::canonical(PathOf(*Texture));
-				const FString OriginalKey = Utf8Path(Original);
-				if (const auto* Existing = Copied.Find(OriginalKey)) { *Texture = *Existing; continue; }
-				FString Extension = Original.extension().string();
-				for (char& C : Extension) if (C >= 'A' && C <= 'Z') C += 'a' - 'A';
-				if (!std::all_of(Extension.begin(), Extension.end(), [](unsigned char C)
+				for (auto& Slot : Slots) for (FString* Texture : { &Slot.DiffuseTexturePath, &Slot.NormalTexturePath })
 				{
-					return C == '.' || (C >= 'a' && C <= 'z') || (C >= '0' && C <= '9');
-				})) Extension = ".texture";
-				const FString Base = AssetFileName(Original);
-				FString File = Base + Extension;
-				int Suffix = 1;
-				auto Lower = [](FString Text)
-				{
-					for (char& C : Text) if (C >= 'A' && C <= 'Z') C += 'a' - 'A';
-					return Text;
-				};
-				while (Names.Contains(Lower(File))) File = Base + "_" + std::to_string(Suffix++) + Extension;
-				Names.Add(Lower(File));
-				const auto Target = Folder / "Textures" / File;
-				const auto Temp = Staged.Folder / ("texture_" + std::to_string(Copied.Num()));
-				std::filesystem::copy_file(Original, Temp);
-				Staged.Files.Add({ Temp, Target });
-				*Texture = Utf8Path(Target);
-				Copied.Add(OriginalKey, *Texture);
-			}
+					if (Texture->empty()) continue;
+					const auto Original = std::filesystem::canonical(PathOf(*Texture));
+					const FString OriginalKey = Utf8Path(Original);
+					if (const auto* Existing = Copied.Find(OriginalKey)) { *Texture = *Existing; continue; }
+					FString Extension = Original.extension().string();
+					for (char& C : Extension) if (C >= 'A' && C <= 'Z') C += 'a' - 'A';
+					if (!std::all_of(Extension.begin(), Extension.end(), [](unsigned char C)
+					{
+						return C == '.' || (C >= 'a' && C <= 'z') || (C >= '0' && C <= '9');
+					})) Extension = ".texture";
+					const FString Base = AssetFileName(Original);
+					FString File = Base + Extension;
+					int Suffix = 1;
+					auto Lower = [](FString Text)
+					{
+						for (char& C : Text) if (C >= 'A' && C <= 'Z') C += 'a' - 'A';
+						return Text;
+					};
+					while (Names.Contains(Lower(File))) File = Base + "_" + std::to_string(Suffix++) + Extension;
+					Names.Add(Lower(File));
+					const auto Target = Folder / "Textures" / File;
+					const auto Temp = Staged.Folder / ("texture_" + std::to_string(Copied.Num()));
+					std::filesystem::copy_file(Original, Temp);
+					Staged.Files.Add({ Temp, Target });
+					*Texture = Utf8Path(Target);
+					Copied.Add(OriginalKey, *Texture);
+				}
+			};
+			if (Output.Kind == EFbxMeshKind::Static) CopyTextures(Output.StaticMesh.MaterialSlots);
+			else CopyTextures(Output.SkeletalMesh.MaterialSlots);
 		}
 		TArray<FString> Paths;
 		for (const auto& Output : Outputs)

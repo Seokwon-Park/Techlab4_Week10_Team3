@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Render/SkeletalMeshData.h"
+#include "Render/StaticMeshData.h"
 
 enum class EFbxImportMode : uint32 { Static, Skeletal };
 enum class EFbxMeshKind : uint32 { Static = 1, Skeletal = 2 };
