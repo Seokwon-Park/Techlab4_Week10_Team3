@@ -30,6 +30,7 @@
 
 DECLARE_CYCLE_STAT("Frustum Cull", STAT_FrustumCull);
 DECLARE_CYCLE_STAT("Gather Elements", STAT_GatherElements);
+DECLARE_CYCLE_STAT("Decal Pass", STAT_DecalPass);
 
 namespace
 {
@@ -622,12 +623,14 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			Decal.Viewport = {};
 			if (!Graph.AddRasterPass(std::move(Decal), [this, Renderer]
 				{
+					SCOPE_CYCLE_COUNTER(STAT_DecalPass);
 					if (!bCorePassSucceeded || ForwardBatches.IsEmpty()) return;
 
 					FPipelineState* DecalPipeline = FRenderResourceManager::GetPSO(EPSOType::Decal);
 					if (!DecalPipeline || !DecalPipeline->Shader) return;
 
 					FConstantBuffer* Constants = Renderer->GetDecalConstants();
+					uint32 ReceiverItems = 0;
 					TArray<FMeshDrawBatch> DecalBatches;
 					DecalBatches.Reserve(ForwardBatches.Num());
 					FDecalData Data{};
@@ -644,16 +647,19 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 						if (Batch.Items.IsEmpty()) continue;
 						Batch.Pipeline = *DecalPipeline;
 						Batch.Sampler = ESamplerState::LinearClamp;
+						ReceiverItems += Batch.Items.Num();
 						DecalBatches.Push(std::move(Batch));
 					}
 
 					const FScene& Scene = World->GetScene();
+					RenderData.RenderStats.DecalCount = Scene.Decals.Num();
 
 					TArray <UDecalComponent*> SortedDecals = Scene.Decals;
 					std::sort(SortedDecals.begin(), SortedDecals.end(), CompareDecalSortOrder);
 
 					for (auto Decal : SortedDecals) {
 						if (Decal->GetDecalTexture() == nullptr) continue;
+						RenderData.RenderStats.DecalsRendered++;
 
 						Decal->SetDecalViewProj();
 						Data.Fade = Decal->GetFade();
@@ -668,6 +674,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 						}
 
 						Renderer->DrawMeshes(DecalBatches);
+						RenderData.RenderStats.DecalDrawCalls += ReceiverItems;
 					}
 				})) return false;
 		}

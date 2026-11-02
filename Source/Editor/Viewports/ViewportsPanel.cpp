@@ -469,6 +469,12 @@ const FRenderStats& Stats = RenderData.RenderStats;
 				Stats.CascadeViewsRedrawn, Stats.CascadeViewsCached), ValueColor });
 		}
 	}
+	if (FStatOverlay::IsEnabled(EStatFlags::Decal)) {
+		Lines.Add({ "Decal", TitleColor });
+		Lines.Add({ std::format("  Decals {}", Stats.DecalCount), ValueColor });
+		Lines.Add({ std::format("  Decals Rendered {}", Stats.DecalsRendered), ValueColor });
+		Lines.Add({ std::format("  Decal Draw Calls {}", Stats.DecalDrawCalls), ValueColor });
+	}
 
 	if (Lines.Num() == 0 && ProfileLines.Num() == 0)
 		return;
