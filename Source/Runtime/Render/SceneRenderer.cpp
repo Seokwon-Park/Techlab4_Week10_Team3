@@ -639,6 +639,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 						if (Decal->GetDecalTexture() == nullptr) continue;
 
 						Decal->SetDecalViewProj();
+						Data.Fade = 0.5f;
 						Data.VP = Decal->GetDecalVP();
 
 						RenderCommand::UpdateBufferData(Constants, &Data, sizeof(Data));

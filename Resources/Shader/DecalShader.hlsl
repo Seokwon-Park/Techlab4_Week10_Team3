@@ -9,8 +9,9 @@ cbuffer PerObject : register(b0)
 
 cbuffer DecalConstants : register(b1)
 {
-    matrix DecalWorld;
     matrix DecalVP;
+    float Fade;
+    float3 Padding;
 }
 
 Texture2D DecalTexture : register(t0);
@@ -56,6 +57,7 @@ float4 mainPS(VS_OUT Input) : SV_Target
     float v = - 0.5 * NDC.y + 0.5;
     
     float4 color = DecalTexture.Sample(DecalSampler, float2(u, v));
+    color.a *= Fade;
     
     return color; 
 }
