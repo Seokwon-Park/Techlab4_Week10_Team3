@@ -8,6 +8,8 @@
 class FLevelEditorTab : public IEditorTab
 {
 public:
+	explicit FLevelEditorTab();
+
 	const char* GetTabName() const override { return TabName.c_str(); }
 	bool CanDetach() const override { return false; }
 	void DrawMenuBar() override;
@@ -18,6 +20,7 @@ public:
 	TDelegate<> OnSaveSceneAs;
 	TDelegate<EFbxImportMode> OnImportFbx;
 	TDelegate<> OnPackageGame;
+	TDelegate<const FString&> OnLevelLoaded;
 
 	void SetIsPackagingQuery(std::function<bool()> InQuery) { IsPackaging = std::move(InQuery); }
 
@@ -40,6 +43,8 @@ public:
 	
 	void SetDockSpaceOptions(bool bEnabled, bool bPassthru);
 
+	void UpdateTabName(std::string_view InPath);
+
 private:
 	std::function<bool()> IsPackaging;
 	FLevelEditorToolbar Toolbar;
@@ -47,5 +52,5 @@ private:
 	bool bUseDockSpace = true;
 	bool bPassthruCentralNode = false;
 
-	FString TabName = "LevelEditor (EmptyLevel)";
+	FString TabName;
 };

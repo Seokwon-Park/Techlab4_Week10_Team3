@@ -1,6 +1,17 @@
 #include "EnginePCH.h"
 #include "Editor/LevelEditor/LevelEditorTab.h"
+#include "Editor/HitoriEd/EditorFileUtils.h"
 #include "Asset/FbxImporter/FbxMeshBake.h"
+#include <filesystem>
+
+FLevelEditorTab::FLevelEditorTab()
+{
+	OnLevelLoaded.Add([this](std::string_view Path) {
+		FLevelEditorTab::UpdateTabName(Path);
+	});
+
+	FLevelEditorTab::UpdateTabName(FEditorFileUtils::CurrentScenePath);
+}
 
 void FLevelEditorTab::DrawMenuBar()
 {
@@ -101,4 +112,11 @@ void FLevelEditorTab::SetDockSpaceOptions(bool bEnabled, bool bPassthru)
 {
 	bUseDockSpace = bEnabled;
 	bPassthruCentralNode = bPassthru;
+}
+
+void FLevelEditorTab::UpdateTabName(std::string_view InPath)
+{
+	const FString LevelName = InPath.empty()
+		? "EmptyLevel" : std::filesystem::path(InPath).filename().string();
+	TabName = LevelName + " (LevelEditor)###LevelEditor";
 }

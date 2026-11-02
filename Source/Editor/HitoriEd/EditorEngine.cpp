@@ -109,9 +109,9 @@ bool UEditorEngine::Init()
 	EditorUI->OnPackageGame.Add([this]() { Packager.Start("Release"); });
 	EditorUI->SetIsPackagingQuery([this]() { return Packager.IsRunning(); });
 
-	FLevelEditorTab& LevelEditorTab = EditorUI->GetLevelEditorTab();
+	LevelEditorTab = &EditorUI->GetLevelEditorTab();
 
-	OutputLogPanel = LevelEditorTab.AddPanel<FOutputLogPanel>();
+	OutputLogPanel = LevelEditorTab->AddPanel<FOutputLogPanel>();
 	FLog::AddSink(OutputLogPanel);
 	HTR_LOG(Info, "Editor Initialize...");
 
@@ -136,7 +136,7 @@ bool UEditorEngine::Init()
 
 	Gizmo = MakeUnique<FGizmo>();
 
-	DetailsPanel = LevelEditorTab.AddPanel<FDetailsPanel>();
+	DetailsPanel = LevelEditorTab->AddPanel<FDetailsPanel>();
 	DetailsPanel->SetImGuiRenderer(ImGuiRenderer.get());
 	DetailsPanel->SetShadowPreviewQuery([this](const ULightComponent* Light, FTexture2DArray*& Atlas,
 		TArray<FLightShadowRenderData>& Shadows)
@@ -159,9 +159,9 @@ bool UEditorEngine::Init()
 		});
 
 
-	EditorControlsPanel = LevelEditorTab.AddPanel<FEditorControlsPanel>();
-	ViewportsPanel = LevelEditorTab.AddPanel<FViewportsPanel>();
-	ContentDrawerPanel = LevelEditorTab.AddPanel<FContentDrawerPanel>();
+	EditorControlsPanel = LevelEditorTab->AddPanel<FEditorControlsPanel>();
+	ViewportsPanel = LevelEditorTab->AddPanel<FViewportsPanel>();
+	ContentDrawerPanel = LevelEditorTab->AddPanel<FContentDrawerPanel>();
 
 	// OutLine
 	OutlineRenderer = MakeUnique<FOutlineRenderer>();
@@ -172,11 +172,11 @@ bool UEditorEngine::Init()
 	CascadeFloorRenderer = MakeUnique<FCascadeFloorRenderer>();
 	CascadeFloorRenderer->Init();
 
-	SettingsPanel = LevelEditorTab.AddPanel<FSettingsPanel>();
-	SequencerPanel = LevelEditorTab.AddPanel<FSequencerPanel>();
+	SettingsPanel = LevelEditorTab->AddPanel<FSettingsPanel>();
+	SequencerPanel = LevelEditorTab->AddPanel<FSequencerPanel>();
 	OutputLogPanel->SetEditorSettings(&SettingsPanel->GetMutableSettings());
 
-	UIEditorPanel = LevelEditorTab.AddPanel<FUIEditorPanel>();
+	UIEditorPanel = LevelEditorTab->AddPanel<FUIEditorPanel>();
 	ContentDrawerPanel->SetCreateWidgetCallback([this](const FString& Path) { UIEditorPanel->NewAsset(Path); });
 	ContentDrawerPanel->SetOpenWidgetCallback([this](const FString& Path) { UIEditorPanel->OpenAsset(Path); });
 
@@ -206,9 +206,7 @@ bool UEditorEngine::Init()
 		: ELayoutMode::QuadSplit;
 	EditorWorld->GetMainCamera()->GetCameraComponent()->SetExternalInputManaged(true);
 
-
-
-	OutlinerPanel = LevelEditorTab.AddPanel<FOutlinerPanel>();
+	OutlinerPanel = LevelEditorTab->AddPanel<FOutlinerPanel>();
 	OutlinerPanel->SetWorld(GetActiveWorld());
 	OutlinerPanel->SetSelectionCallback(
 		[this](USceneComponent* Root)
@@ -328,7 +326,7 @@ bool UEditorEngine::Init()
 	Stop.CanExecute = [this]()->bool {return PlayWorld; };
 	Stop.Execute = [this]() { RequestEndPlayMap(); };
 
-	FLevelEditorToolbar& LevelEditorToolbar = *LevelEditorTab.GetToolbar();
+	FLevelEditorToolbar& LevelEditorToolbar = *LevelEditorTab->GetToolbar();
 	LevelEditorToolbar.SetCommands({ Play, Pause, Resume, StepFrame, Stop });
 	LevelEditorToolbar.SetPlayModeBinding(
 		[this]() { return PlayMode; },
@@ -1558,6 +1556,8 @@ void UEditorEngine::OpenScene()
 		return;
 
 	ResetSceneSelection();
+
+	LevelEditorTab->OnLevelLoaded.Broadcast(FEditorFileUtils::CurrentScenePath);
 }
 
 // 공통 파일 유틸리티로 현재 씬을 저장한다.

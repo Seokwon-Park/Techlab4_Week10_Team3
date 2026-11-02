@@ -166,6 +166,7 @@ private:
 
 	UFont* SystemFont;
 
+	FLevelEditorTab* LevelEditorTab;
 	FOutputLogPanel* OutputLogPanel = nullptr;
 
 	FDetailsPanel* DetailsPanel = nullptr;
