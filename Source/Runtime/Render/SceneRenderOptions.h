@@ -26,6 +26,7 @@ struct FSceneRenderOptions
 	float DisplayGamma = 2.2f;
 	bool bShowVignette = true;
 	bool bShowCameraOverlay = true;
+	bool bShowSkeletalMesh = true;
 
 	ERenderingPath RenderingPath = ERenderingPath::Deferred;
 	ELightingModel LightingModel = ELightingModel::Gouraud;

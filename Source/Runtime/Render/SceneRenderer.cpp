@@ -160,6 +160,8 @@ void FSceneRenderer::InitViews(FRenderer* Renderer, const FSceneRenderOptions& O
 		return;
 	}
 
+	CachedViewContext.bShowSkeletalMesh = Options.bShowSkeletalMesh;
+
 	// 월드 프리미티브 수집 및 절두체 컬링
 	GatherRenderPackets(World->GetScene(), RenderData, CachedViewContext, &View.Frustum, Renderer);
 	RenderData.AmbientLight = World->GetScene().GetSkyAmbientLight(View.bGameView);
@@ -1040,6 +1042,9 @@ void FSceneRenderer::GatherRenderPackets(FScene& Scene, FSceneRenderData& Data,
 				FPrimitiveSceneProxy* Proxy = VisibleProxies[VisibleIndex];
 				UPrimitiveComponent* Primitive = Proxy->GetComponent();
 				if (!Primitive || !Primitive->IsVisible())
+					continue;
+
+				if (Proxy->IsSkinned() && !View.bShowSkeletalMesh)
 					continue;
 
 				const uint32 FirstNew = RenderQueue.Num();
