@@ -3,6 +3,8 @@
 #include "Asset/AssetManager.h"
 #include "Render/RenderCommand.h"
 #include "Render/RenderResourceManager.h"
+#include "Components/SkinnedMeshComponent.h"
+#include "Render/SkeletalMeshObject.h"
 
 // 스텐실 마스크·외곽선 두 패스의 Shader와 상수 버퍼를 준비한다.
 // 두 패스 모두 깊이 테스트를 끄므로 다른 물체에 가려져도 외곽선이 보인다.
@@ -43,13 +45,31 @@ void FOutlineRenderer::OnRender(const FOutline& InOutline, const FMatrix& InView
 		return;
 	}
 
+	FVertexBuffer* VertexBuffer = nullptr;
+	FIndexBuffer* IndexBuffer = nullptr;
+	if (UStaticMesh* StaticMesh = InOutline.GetMesh())
+	{
+		VertexBuffer = StaticMesh->GetVertexBuffer(0);
+		IndexBuffer = StaticMesh->GetIndexBuffer(0);
+	}
+	else if (USkinnedMeshComponent* Skinned = Cast<USkinnedMeshComponent>(InOutline.GetTarget()))
+	{
+		// 스켈레탈은 현재 포즈가 들어 있는 인스턴스 VB로 그린다
+		if (FSkeletalMeshObject* MeshObject = Skinned->GetMeshObject())
+		{
+			VertexBuffer = MeshObject->GetVertexBuffer(0);
+			IndexBuffer = MeshObject->GetIndexBuffer(0);
+		}
+	}
+
 	// 메시 없는 컴포넌트(텍스트 등)는 아웃라인을 그리지 않는다
-	if (!InOutline.GetMesh() || !InOutline.GetMesh()->IndexBuffer)
+	if (!VertexBuffer || !IndexBuffer)
 	{
 		return;
 	}
 
-	RenderCommand::BindMesh(InOutline.GetMesh());
+	RenderCommand::BindVertexBuffer(VertexBuffer);
+	RenderCommand::BindIndexBuffer(IndexBuffer);
 	RenderCommand::BindConstantBuffer(0, ConstantBuffer.get(), EShaderBindFlagBits::Vertex);
 
 	const FMatrix OriginalWorld = InOutline.GetWorldMatrix();
@@ -58,7 +78,7 @@ void FOutlineRenderer::OnRender(const FOutline& InOutline, const FMatrix& InView
     const FMatrix& ViewProj = InViewProj;
 	const float ViewportWidth = static_cast<float>(Viewport.Width);
 	const float ViewportHeight = static_cast<float>(Viewport.Height);
-	const uint32 IndexCount = InOutline.GetMesh()->IndexBuffer->GetIndexCount();
+	const uint32 IndexCount = IndexBuffer->GetIndexCount();
 
 	// 1패스: 두께 0(확장 없음)으로 선택 메시 영역을 스텐실에 찍는다.
 	FOutlineData MaskConst = { World, NormalMatrix, ViewProj, FVector4(ViewportWidth, ViewportHeight, 0.0f, 0.0f) };

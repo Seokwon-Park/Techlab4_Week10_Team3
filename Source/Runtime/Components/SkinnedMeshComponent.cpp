@@ -28,15 +28,9 @@ void USkinnedMeshComponent::SetSkeletalMesh(USkeletalMesh* InMesh)
 	if (SkeletalMesh == InMesh) return;
 
 	SkeletalMesh = InMesh;
-	const bool bValid = InMesh && !InMesh->GetRenderData().LODRenderData.IsEmpty();
-	MeshObject = bValid ? MakeUnique<FSkeletalMeshObjectCPUSkin>(InMesh) : nullptr;
-	ComponentSpaceTransforms.Reset();
-	OnSkeletalMeshChanged();
-
+	
 	ClearOverrideMaterials();
-	MarkRenderStateDirty();
-	OnTransformDirty();
-	bBoneTransformsDirty = true;
+	RecreateMeshObject();
 }
 
 FPrimitiveSceneProxy* USkinnedMeshComponent::CreateSceneProxy()
@@ -118,6 +112,26 @@ void USkinnedMeshComponent::SendRenderDynamicData()
 			Proxy->GetScene()->InvalidateShadowsInBounds(Proxy->GetBounds());
 		}
 	}
+}
+
+void USkinnedMeshComponent::RecreateMeshObject()
+{
+	const bool bValid = SkeletalMesh && !SkeletalMesh->GetRenderData().LODRenderData.IsEmpty();
+	MeshObject = bValid ? MakeUnique<FSkeletalMeshObjectCPUSkin>(SkeletalMesh) : nullptr;
+	ComponentSpaceTransforms.Reset();
+	OnSkeletalMeshChanged();
+	
+	MarkRenderStateDirty();
+	OnTransformDirty();
+	bBoneTransformsDirty = true;
+}
+
+void USkinnedMeshComponent::Serialize(FStructuredArchive::FRecord Record)
+{
+	Super::Serialize(Record);
+
+	if (Record.GetUnderlyingArchive().IsLoading())
+		RecreateMeshObject();
 }
 
 

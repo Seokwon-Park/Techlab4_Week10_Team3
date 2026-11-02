@@ -3,6 +3,25 @@
 #include "RenderCommand.h"
 #include "Tasks/Tasks.h"
 #include "Tasks/TaskScheduler.h"
+#include "Core/Stats/LightweightStats.h"
+
+DECLARE_CYCLE_STAT("CPU Skinning", STAT_CpuSkinning);
+DECLARE_CYCLE_STAT("Skin Upload", STAT_SkinUpload);
+
+namespace
+{
+	// 비균등 스케일에서도 면에 수직이 되도록 3x3 부분의 여인수 행렬로 노멀을 옮긴다.
+	// 미러(행렬식 음수)면 여인수 결과가 뒤집히므로 부호를 되돌린다.
+	FVector TransformNormal(const FMatrix& M, const FVector& N)
+	{
+		const FVector R0(M.M[0][0], M.M[0][1], M.M[0][2]);
+		const FVector R1(M.M[1][0], M.M[1][1], M.M[1][2]);
+		const FVector R2(M.M[2][0], M.M[2][1], M.M[2][2]);
+		const FVector C0 = FVector::Cross(R1, R2);
+		const FVector Result = C0 * N.X + FVector::Cross(R2, R0) * N.Y + FVector::Cross(R0, R1) * N.Z;
+		return (R0.Dot(C0) < 0.0f ? Result * -1.0f : Result).Normalized();
+	}
+}
 
 FSkeletalMeshObjectCPUSkin::FSkeletalMeshObjectCPUSkin(USkeletalMesh* InMesh)
 	:FSkeletalMeshObject(InMesh)
@@ -53,9 +72,10 @@ void FSkeletalMeshObjectCPUSkin::UpdateRefToLocalMatrices(const TArray<FMatrix>&
 
 void FSkeletalMeshObjectCPUSkin::SkinVertices()
 {
+	SCOPE_CYCLE_COUNTER(STAT_CpuSkinning);
 	const FSkeletalMeshLODRenderData& LOD = SkeletalMesh->GetRenderData().LODRenderData[0];
 	const uint32 Count = static_cast<uint32>(LOD.BindVertices.Num());
-	const uint32 NumThreads = Tasks::FTaskScheduler::Get().GetNumWorkers();
+	const uint32 NumThreads = Tasks::FTaskScheduler::Get().GetNumWorkers() + 1;
 	const uint32 ChunkCount = std::clamp(Count / 2048u, 1u, NumThreads * 2);
 
 	TArray<FBox> ChunkBounds;
@@ -80,8 +100,8 @@ void FSkeletalMeshObjectCPUSkin::SkinVertices()
 				FVertex& Out = SkinnedVertices[v];
 				Out = Bind;
 				Out.Position = M.TransformPosition(Bind.Position);
-				Out.Normal = M.TransformVector(Bind.Normal).Normalized();
-				const FVector Tangent = M.TransformVector(FVector(Bind.Tangent.X, Bind.Tangent.Y, Bind.Tangent.Z));
+				Out.Normal = TransformNormal(M, Bind.Normal);
+				const FVector Tangent = M.TransformVector(FVector(Bind.Tangent.X, Bind.Tangent.Y, Bind.Tangent.Z)).Normalized();
 				Out.Tangent = FVector4(Tangent.X, Tangent.Y, Tangent.Z, Bind.Tangent.W);
 
 				for (int Axis = 0; Axis < 3; ++Axis)
@@ -100,6 +120,7 @@ void FSkeletalMeshObjectCPUSkin::SkinVertices()
 
 void FSkeletalMeshObjectCPUSkin::UploadVertices()
 {
+	SCOPE_CYCLE_COUNTER(STAT_SkinUpload);
 	if (!FinalVertexBuffer) return;
 	void* Dst = RenderCommand::MapWriteDiscard(FinalVertexBuffer.get());
 	if (!Dst)return;
