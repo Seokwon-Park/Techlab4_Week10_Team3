@@ -7,6 +7,19 @@
 #include "Math/BoxSphereBounds.h"
 #include "Render/SkeletalMesh.h"
 
+// Bone의 네임스페이스를 제외한 마지막 콜론 뒤의 이름만 반환
+FString GetBoneDisplayName(const FString& BoneName)
+{
+	const auto Separator = BoneName.find_last_of(':');
+
+	if (Separator == FString::npos)
+	{
+		return BoneName;
+	}
+
+	return BoneName.substr(Separator + 1);
+}
+
 FSkeletalMeshEditor::FSkeletalMeshEditor(
 	UEditorEngine& InEditorEngine,
 	FEditorUI& InEditorUI,
@@ -56,6 +69,9 @@ bool FSkeletalMeshEditor::InitializeResources()
 	MeshComponent->SetSkeletalMesh(Mesh);
 	// 애니메이션 재생 없이 바인드 포즈의 본 변환과 스키닝 결과를 준비합니다.
 	MeshComponent->RefreshBoneTransformsNow();
+
+	// BoneItems를 빌드합니다. (에디터 UI에서 본 계층 구조를 표시하기 위해)
+	BuildBoneItems();
 
 	// 새로운 ViewportClient 생성
 	ViewportClient = MakeUnique<FEditorViewportClient>(PreviewScene);
@@ -186,4 +202,38 @@ void FSkeletalMeshEditor::ShutdownResources()
 	MeshComponent = nullptr;
 	Mesh = nullptr;
 	FAssetEditor::ShutdownResources();
+}
+
+void FSkeletalMeshEditor::BuildBoneItems()
+{
+	if (!Mesh)
+	{
+		return;
+	}
+
+	const TArray<FBoneInfo>& BoneData = Mesh->GetRefSkeleton();
+	BoneItems.Empty();
+
+	for (int32 BoneIndex = 0; BoneIndex < BoneData.Num(); ++BoneIndex)
+	{
+		const FBoneInfo& Bone = BoneData[BoneIndex];
+
+		BoneItems.Add(FEditorBoneItem{
+			.BoneIndex = BoneIndex,
+			.Name = GetBoneDisplayName(Bone.Name),
+			.ChildBoneIndices = {},
+			.InverseBindPose = Bone.InverseBindPose
+		});
+
+		FEditorBoneItem& BoneItem = BoneItems[BoneIndex];
+
+		if (Bone.ParentIndex == -1)
+		{
+			RootBoneIndices.Add(BoneIndex);
+		}
+		else if (Bone.ParentIndex >= 0)
+		{
+			BoneItems[Bone.ParentIndex].ChildBoneIndices.Add(BoneIndex);
+		}
+	}
 }

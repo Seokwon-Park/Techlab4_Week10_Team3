@@ -4,6 +4,18 @@
 #include "Editor/Viewports/EditorViewportClient.h"
 #include "Camera/ViewportCameraMovement.h"
 
+struct FEditorBoneItem
+{
+	int32 BoneIndex;
+	FString Name;
+	
+	// 자식 Bone Index 배열. 계층 구조 그릴 때 사용
+	TArray<int32> ChildBoneIndices;
+
+	// BindPose 행렬의 역행렬. Gizmo 그릴 때 사용
+	FMatrix InverseBindPose;
+};
+
 class FSkeletalMeshEditor : public FAssetEditor
 {
 public:
@@ -44,15 +56,21 @@ public:
 	USkeletalMesh* GetMesh() const { return Mesh; }
 	FEditorViewportClient* GetViewportClient() const { return ViewportClient.get(); }
 
+	const TArray<int32>& GetRootBoneIndices() const { return RootBoneIndices; }
+	const TArray<FEditorBoneItem>& GetBoneItems() const { return BoneItems; }
+
 protected:
 	// 이 에디터에 연결된 탭을 생성합니다.
-	TUniquePtr<IEditorTab> CreateTab() override;
+	TUniquePtr<class IEditorTab> CreateTab() override;
 
 	// 리소스를 초기화합니다.
 	bool InitializeResources() override;
 
 	// 리소스를 정리합니다.
 	void ShutdownResources() override;
+
+	// UI, 에디터에서 사용할 수 있도록 BoneItems를 빌드합니다.
+	void BuildBoneItems();
 
 private:
 	class USkeletalMesh* Mesh = nullptr;
@@ -63,6 +81,9 @@ private:
 
 	uint32 ViewportWidth = 0;
 	uint32 ViewportHeight = 0;
+
+	TArray<FEditorBoneItem> BoneItems;
+	TArray<int32> RootBoneIndices;
 
 	bool bViewportVisible = false;
 	bool bInitialFocusPending = true;
