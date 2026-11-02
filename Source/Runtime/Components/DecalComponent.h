@@ -9,7 +9,9 @@ class UDecalComponent : public USceneComponent
 {
 	GENERATED_BODY()
 public:
-	UDecalComponent() = default;
+	void TickComponent(float DeltaTime) override;
+
+	UDecalComponent() { PrimaryComponentTick.bCanEverTick = true; }
 	UTexture2D* GetDecalTexture() const { return DecalTexture; }
 	void SetDecalTexture(UTexture2D* InTexture) { DecalTexture = InTexture; }
 	FVector GetExtent() const { return Extent; }
@@ -20,6 +22,7 @@ public:
 	void SetDecalViewProj();
 	FMatrix GetDecalVP() { return DecalViewProj; }
 
+	float GetFade() const { return Fade; }
 
 protected:
 	virtual bool ShouldCreateRenderState() const override
@@ -37,4 +40,10 @@ private:
 
 	FMatrix DecalViewProj;
 
+	float Fade = 0.0f;
+	float Delay = 1.0f;
+	float FadeIn = 1.0f;
+	float Visible = 1.0f;
+	float FadeOut = 1.0f;
+	float CurrentTime = 0.0f;
 };

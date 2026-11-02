@@ -4,6 +4,35 @@
 #include "Engine/Scene.h"
 #include "Engine/World.h"
 
+void UDecalComponent::TickComponent(float DeltaTime)
+{
+	if (CurrentTime > Delay + FadeIn + Visible + FadeOut)
+	{
+		return;
+	}
+	CurrentTime += DeltaTime;
+
+	const float FadeInEnd = Delay + FadeIn;
+	const float VisibleEnd = FadeInEnd + Visible;
+	const float FadeOutEnd = VisibleEnd + FadeOut;
+
+	if (CurrentTime < Delay) {
+		Fade = 0.0f;
+	}
+	else if (CurrentTime < FadeInEnd) {
+		Fade = (CurrentTime - Delay) / FadeIn;
+	}
+	else if (CurrentTime < VisibleEnd) {
+		Fade = 1.0f;
+	}
+	else if (CurrentTime < FadeOutEnd) {
+		Fade = 1 - (CurrentTime - VisibleEnd) / FadeOut;
+	}
+	else
+		Fade = 0.0f;
+	
+}
+
 void UDecalComponent::SetDecalViewProj()
 {
 	FVector Forward, Up;
