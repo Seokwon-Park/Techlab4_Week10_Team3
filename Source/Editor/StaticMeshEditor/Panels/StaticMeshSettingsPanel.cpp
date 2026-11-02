@@ -9,11 +9,6 @@ FStaticMeshSettingsPanel::FStaticMeshSettingsPanel(FStaticMeshEditor& InEditor)
 
 void FStaticMeshSettingsPanel::DrawContent()
 {
-	if (ImGui::Button("Focus Mesh"))
-	{
-		Editor.FocusMesh();
-	}
-
 	if (FEditorViewportClient* Client = Editor.GetViewportClient())
 	{
 		bool bWireframe = Client->IsWireframe();

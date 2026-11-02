@@ -28,11 +28,6 @@ void FStaticMeshEditorTab::DrawMenuBar()
 {
 	if (ImGui::BeginMenu("Viewer"))
 	{
-		if (ImGui::MenuItem("Focus Mesh", "F"))
-		{
-			MeshEditor.FocusMesh();
-		}
-
 		if (ImGui::MenuItem("Close Viewer"))
 		{
 			MeshEditor.Close();
@@ -58,9 +53,9 @@ void FStaticMeshEditorTab::BuildDefaultLayout(ImGuiID InDockSpaceId, const ImVec
 	ImGui::DockBuilderAddNode(InDockSpaceId, ImGuiDockNodeFlags_DockSpace);
 	ImGui::DockBuilderSetNodeSize(InDockSpaceId, Size);
 	ImGuiID ViewportId = InDockSpaceId;
-	ImGuiID RightId = ImGui::DockBuilderSplitNode(ViewportId, ImGuiDir_Right, 0.28f, nullptr, &ViewportId);
+	ImGuiID RightId = ImGui::DockBuilderSplitNode(ViewportId, ImGuiDir_Right, 0.22f, nullptr, &ViewportId);
 	ImGuiID InfoId = RightId;
-	const ImGuiID SettingsId = ImGui::DockBuilderSplitNode(InfoId, ImGuiDir_Down, 0.4f, nullptr, &InfoId);
+	const ImGuiID SettingsId = ImGui::DockBuilderSplitNode(InfoId, ImGuiDir_Down, 0.75f, nullptr, &InfoId);
 
 	ImGui::DockBuilderDockWindow(Panels[0]->GetWindowName(), ViewportId);
 	ImGui::DockBuilderDockWindow(Panels[1]->GetWindowName(), InfoId);
