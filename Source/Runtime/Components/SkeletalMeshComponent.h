@@ -18,6 +18,9 @@ public:
 	void ResetPose();
 	void RefreshBoneTransformsNow();
 
+	using Super::Serialize;
+	virtual void Serialize(FStructuredArchive::FRecord Record) override;
+
 protected:
 	void RefreshBoneTransforms() override;
 	void OnSkeletalMeshChanged() override;

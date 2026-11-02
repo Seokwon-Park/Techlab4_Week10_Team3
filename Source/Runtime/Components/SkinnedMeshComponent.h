@@ -35,6 +35,9 @@ public:
 
 	const TArray<FMatrix>& GetComponentSpaceTransform() const { return ComponentSpaceTransforms; }
 
+	using Super::Serialize;
+	virtual void Serialize(FStructuredArchive::FRecord Record) override;
+
 protected:
 	virtual void RefreshBoneTransforms();
 	void SendRenderDynamicData();
@@ -42,6 +45,9 @@ protected:
 
 	TArray<FMatrix> ComponentSpaceTransforms;
 private:
+	void RecreateMeshObject();
+
+	UPROPERTY()
 	USkeletalMesh* SkeletalMesh = nullptr;
 	TUniquePtr<FSkeletalMeshObject> MeshObject;
 	bool bBoneTransformsDirty = true;
