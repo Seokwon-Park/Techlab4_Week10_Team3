@@ -538,48 +538,63 @@ FLODGenerateResult UAssetManager::GenerateStaticMeshLODs(UStaticMesh& Mesh, cons
 	return Result;
 }
 
-bool UAssetManager::BuildMaterialsFromSlots(const TArray<FStaticMaterialSlot>& Slots, TArray<UMaterial*>& OutMaterials)
+namespace
 {
-	// MaterialSlots를 실제 UMaterial로 변환
-	UMaterial* DefaultMaterial = UAssetManager::GetAssetByPath<UMaterial>("DefaultMaterial");
-	if (!DefaultMaterial)
+	template<typename TSlot>
+	bool BuildMaterialsFromSlotsImpl(const TArray<TSlot>& Slots, TArray<UMaterial*>& OutMaterials)
 	{
-		return false;
-	}
-
-	for (const FStaticMaterialSlot& Slot : Slots)
-	{
-		UMaterial* Material = UMaterial::CreateInstance(DefaultMaterial);
-		if (!Material)
+		// MaterialSlots를 실제 UMaterial로 변환
+		UMaterial* DefaultMaterial = UAssetManager::GetAssetByPath<UMaterial>("DefaultMaterial");
+		if (!DefaultMaterial)
 		{
 			return false;
 		}
-		Material->BaseColor = Slot.BaseColor;
-		if (Material->BaseColor.W < 1.0f)
-		{
-			Material->BlendState = EBlendState::AlphaBlend;
-			Material->DepthStencilState = EDepthStencilState::ReadOnly;
-		}
 
-		if (!Slot.DiffuseTexturePath.empty())
+		for (const TSlot& Slot : Slots)
 		{
-			UTexture2D* Texture = UAssetManager::Get().LoadTexture(Slot.DiffuseTexturePath);
-
-			if (Texture)
+			UMaterial* Material = UMaterial::CreateInstance(DefaultMaterial);
+			if (!Material)
 			{
-				Material->Textures[0] = Texture;
+				return false;
 			}
-		}
-
-		if (!Slot.NormalTexturePath.empty())
-		{
-			if (UTexture2D* NormalTexture = UAssetManager::Get().LoadTexture(Slot.NormalTexturePath))
+			Material->BaseColor = Slot.BaseColor;
+			if (Material->BaseColor.W < 1.0f)
 			{
-				Material->Textures[1] = NormalTexture;
+				Material->BlendState = EBlendState::AlphaBlend;
+				Material->DepthStencilState = EDepthStencilState::ReadOnly;
 			}
-		}
 
-		OutMaterials.Add(Material);
+			if (!Slot.DiffuseTexturePath.empty())
+			{
+				UTexture2D* Texture = UAssetManager::Get().LoadTexture(Slot.DiffuseTexturePath);
+
+				if (Texture)
+				{
+					Material->Textures[0] = Texture;
+				}
+			}
+
+			if (!Slot.NormalTexturePath.empty())
+			{
+				if (UTexture2D* NormalTexture = UAssetManager::Get().LoadTexture(Slot.NormalTexturePath))
+				{
+					Material->Textures[1] = NormalTexture;
+				}
+			}
+
+			OutMaterials.Add(Material);
+		}
+		return true;
 	}
-	return true;
+
+}
+
+bool UAssetManager::BuildMaterialsFromSlots(const TArray<FStaticMaterialSlot>& Slots, TArray<UMaterial*>& OutMaterials)
+{
+	return BuildMaterialsFromSlotsImpl(Slots, OutMaterials);
+}
+
+bool UAssetManager::BuildMaterialsFromSlots(const TArray<FSkeletalMaterialSlot>& Slots, TArray<UMaterial*>& OutMaterials)
+{
+	return BuildMaterialsFromSlotsImpl(Slots, OutMaterials);
 }

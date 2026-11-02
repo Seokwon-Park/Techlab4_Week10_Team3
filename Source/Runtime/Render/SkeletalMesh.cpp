@@ -8,13 +8,13 @@ bool USkeletalMesh::Build(FSkeletalMeshData&& ImportData, FString& OutError)
 	// CreateStaticMesh와 같은 기본값: 슬롯/섹션이 없으면 하나씩 채운다
 	if (ImportData.MaterialSlots.IsEmpty())
 	{
-		FStaticMaterialSlot DefaultSlot;
+		FSkeletalMaterialSlot DefaultSlot;
 		DefaultSlot.Name = "Default";
 		ImportData.MaterialSlots.Add(DefaultSlot);
 	}
 	if (ImportData.Sections.IsEmpty())
 	{
-		FStaticMeshSection DefaultSection;
+		FSkeletalMeshSection DefaultSection;
 		DefaultSection.StartIndex = 0;
 		DefaultSection.IndexCount = static_cast<uint32>(ImportData.Indices.Num());
 		DefaultSection.MaterialSlotIndex = 0;
@@ -107,7 +107,7 @@ TSharedPtr<const FMeshRenderState> USkeletalMesh::GetRenderState(const TArray<UM
 	{
 		auto& Range = State->LODs[0];
 		Range.FirstSection = 0;
-		for (const FStaticMeshSection& Section : RenderData.LODRenderData[0].Sections)
+		for (const FSkeletalMeshSection& Section : RenderData.LODRenderData[0].Sections)
 		{
 			UMaterial* Material = Section.MaterialSlotIndex < InMaterials.size()
 				? InMaterials[Section.MaterialSlotIndex] : GetMaterial(Section.MaterialSlotIndex);

@@ -2,13 +2,21 @@
 #include "FbxMeshBake.h"
 
 #include <fstream>
+#include <cstddef>
 #include <type_traits>
 
 namespace
 {
 	constexpr uint32 Magic = 0x58424648; // HFBX, little endian
-	constexpr uint32 Version = 1;
+	constexpr uint32 Version = 2;
 	static_assert(sizeof(FVertex) == 64 && sizeof(FSkinWeight) == 20);
+	// 기존 Binary의 Section 배열을 그대로 읽도록 두 타입의 바이트 배치를 고정한다.
+	static_assert(std::is_trivially_copyable_v<FSkeletalMeshSection> && std::is_standard_layout_v<FSkeletalMeshSection>);
+	static_assert(sizeof(FSkeletalMeshSection) == sizeof(FStaticMeshSection) && sizeof(FSkeletalMeshSection) == 12);
+	static_assert(alignof(FSkeletalMeshSection) == alignof(FStaticMeshSection));
+	static_assert(offsetof(FSkeletalMeshSection, StartIndex) == offsetof(FStaticMeshSection, StartIndex));
+	static_assert(offsetof(FSkeletalMeshSection, IndexCount) == offsetof(FStaticMeshSection, IndexCount));
+	static_assert(offsetof(FSkeletalMeshSection, MaterialSlotIndex) == offsetof(FStaticMeshSection, MaterialSlotIndex));
 
 	std::filesystem::path FilePath(const FString& Path)
 	{
@@ -79,7 +87,8 @@ namespace
 		}
 	};
 
-	bool ReadSlots(FReader& In, TArray<FStaticMaterialSlot>& Slots)
+	template<typename TSlot>
+	bool ReadSlots(FReader& In, TArray<TSlot>& Slots)
 	{
 		uint32 N;
 		if (!In.Count(N, 3 * sizeof(uint32) + sizeof(FVector4))) return false;
@@ -93,13 +102,17 @@ namespace
 	{
 		auto& Vertices = D.Kind == EFbxMeshKind::Static ? D.StaticMesh.Vertices : D.SkeletalMesh.BindVertices;
 		auto& Indices = D.Kind == EFbxMeshKind::Static ? D.StaticMesh.Indices : D.SkeletalMesh.Indices;
-		auto& Sections = D.Kind == EFbxMeshKind::Static ? D.StaticMesh.Sections : D.SkeletalMesh.Sections;
-		auto& Slots = D.Kind == EFbxMeshKind::Static ? D.StaticMesh.MaterialSlots : D.SkeletalMesh.MaterialSlots;
 		auto& Bounds = D.Kind == EFbxMeshKind::Static ? D.StaticMesh.AABB : D.SkeletalMesh.BindAABB;
-		if (!In.Array(Vertices) || !In.Array(Indices) || !In.Array(Sections) || !ReadSlots(In, Slots) || !In.Pod(Bounds)) return false;
-		// 파일의 Section 범위를 넓은 정수로 검사해 uint32 덧셈의 overflow를 피한다.
-		for (const auto& Section : Sections)
-			if (uint64(Section.StartIndex) + Section.IndexCount > static_cast<uint64>(Indices.Num())) return false;
+		auto ReadGeometry = [&](auto& Sections, auto& Slots)
+		{
+			if (!In.Array(Vertices) || !In.Array(Indices) || !In.Array(Sections) || !ReadSlots(In, Slots) || !In.Pod(Bounds)) return false;
+			// 파일의 Section 범위를 넓은 정수로 검사해 uint32 덧셈의 overflow를 피한다.
+			for (const auto& Section : Sections)
+				if (uint64(Section.StartIndex) + Section.IndexCount > static_cast<uint64>(Indices.Num())) return false;
+			return true;
+		};
+		if (!(D.Kind == EFbxMeshKind::Static ? ReadGeometry(D.StaticMesh.Sections, D.StaticMesh.MaterialSlots)
+			: ReadGeometry(D.SkeletalMesh.Sections, D.SkeletalMesh.MaterialSlots))) return false;
 		if (D.Kind == EFbxMeshKind::Skeletal)
 		{
 			uint32 N;
@@ -123,8 +136,12 @@ namespace
 		}
 		const auto& Bounds = D.Kind == EFbxMeshKind::Static ? D.StaticMesh.AABB : D.SkeletalMesh.BindAABB;
 		for (int I = 0; I < 3; ++I) if (!std::isfinite(Bounds.Min[I]) || !std::isfinite(Bounds.Max[I]) || Bounds.Min[I] > Bounds.Max[I]) return false;
-		const auto& Slots = D.Kind == EFbxMeshKind::Static ? D.StaticMesh.MaterialSlots : D.SkeletalMesh.MaterialSlots;
-		for (const auto& S : Slots) for (int I = 0; I < 4; ++I) if (!std::isfinite(S.BaseColor[I])) return false;
+		auto FiniteSlots = [](const auto& Slots)
+		{
+			for (const auto& S : Slots) for (int I = 0; I < 4; ++I) if (!std::isfinite(S.BaseColor[I])) return false;
+			return true;
+		};
+		if (!(D.Kind == EFbxMeshKind::Static ? FiniteSlots(D.StaticMesh.MaterialSlots) : FiniteSlots(D.SkeletalMesh.MaterialSlots))) return false;
 		if (D.Kind == EFbxMeshKind::Skeletal)
 		{
 			for (const auto& W : D.SkeletalMesh.SkinWeight) for (int I = 0; I < MaxBoneInfluences; ++I)
@@ -155,13 +172,19 @@ bool FFbxMeshBake::Read(const FString& Path, FFbxBakedMesh& OutData, FString& Ou
 	FReader In(Path);
 	FFbxBakedMesh D;
 	uint32 M = 0, V = 0;
-	if (!In.Pod(M) || M != Magic || !In.Pod(V) || V != Version || !In.Pod(D.Kind) || (D.Kind != EFbxMeshKind::Static && D.Kind != EFbxMeshKind::Skeletal)
+	if (!In.Pod(M) || M != Magic || !In.Pod(V)) { OutError = "FBX binary: invalid header: " + Path; return false; }
+	if (V != Version)
+	{
+		OutError = "FBX binary: unsupported version " + std::to_string(V) + " (expected " + std::to_string(Version) + "); reimport the source FBX: " + Path;
+		return false;
+	}
+	if (!In.Pod(D.Kind) || (D.Kind != EFbxMeshKind::Static && D.Kind != EFbxMeshKind::Skeletal)
 		|| !In.Pod(D.Source.Mode) || (D.Source.Mode != EFbxImportMode::Static && D.Source.Mode != EFbxImportMode::Skeletal)
 		|| !In.Pod(D.Source.Outputs) || D.Source.Outputs == 0 || D.Source.Outputs > 3 || !(D.Source.Outputs & static_cast<uint32>(D.Kind))
 		|| (D.Source.Mode == EFbxImportMode::Static && D.Source.Outputs != static_cast<uint32>(EFbxMeshKind::Static))
 		|| !In.String(D.Source.Path) || !In.Pod(D.Source.ModifiedTime) || !In.Pod(D.Source.Size))
 	{
-		OutError = "FBX binary: invalid header/version: " + Path;
+		OutError = "FBX binary: invalid header: " + Path;
 		return false;
 	}
 	if (!ReadPayload(In, D) || !FinitePayload(D)) { OutError = "FBX binary: invalid/truncated payload: " + Path; return false; }
@@ -178,11 +201,14 @@ bool FFbxMeshBake::Write(const FString& Path, const FFbxBakedMesh& D, FString& O
 	Out.String(D.Source.Path); Out.Pod(D.Source.ModifiedTime); Out.Pod(D.Source.Size);
 	const auto& Vertices = D.Kind == EFbxMeshKind::Static ? D.StaticMesh.Vertices : D.SkeletalMesh.BindVertices;
 	const auto& Indices = D.Kind == EFbxMeshKind::Static ? D.StaticMesh.Indices : D.SkeletalMesh.Indices;
-	const auto& Sections = D.Kind == EFbxMeshKind::Static ? D.StaticMesh.Sections : D.SkeletalMesh.Sections;
-	const auto& Slots = D.Kind == EFbxMeshKind::Static ? D.StaticMesh.MaterialSlots : D.SkeletalMesh.MaterialSlots;
-	Out.Array(Vertices); Out.Array(Indices); Out.Array(Sections);
-	Out.Pod(static_cast<uint32>(Slots.Num()));
-	for (const auto& S : Slots) { Out.String(S.Name); Out.Pod(S.BaseColor); Out.String(S.DiffuseTexturePath); Out.String(S.NormalTexturePath); }
+	auto WriteGeometry = [&](const auto& Sections, const auto& Slots)
+	{
+		Out.Array(Vertices); Out.Array(Indices); Out.Array(Sections);
+		Out.Pod(static_cast<uint32>(Slots.Num()));
+		for (const auto& S : Slots) { Out.String(S.Name); Out.Pod(S.BaseColor); Out.String(S.DiffuseTexturePath); Out.String(S.NormalTexturePath); }
+	};
+	if (D.Kind == EFbxMeshKind::Static) WriteGeometry(D.StaticMesh.Sections, D.StaticMesh.MaterialSlots);
+	else WriteGeometry(D.SkeletalMesh.Sections, D.SkeletalMesh.MaterialSlots);
 	Out.Pod(D.Kind == EFbxMeshKind::Static ? D.StaticMesh.AABB : D.SkeletalMesh.BindAABB);
 	if (D.Kind == EFbxMeshKind::Skeletal)
 	{
