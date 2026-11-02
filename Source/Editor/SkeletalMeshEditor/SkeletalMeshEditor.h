@@ -21,7 +21,7 @@ class FSkeletalMeshEditor : public FAssetEditor
 public:
 	FSkeletalMeshEditor(
 		class UEditorEngine& InEditorEngine,
-		class FEditorUI& InEditorUI,
+		class FEditorManager& InEditorManager,
 		const FString& InAssetPath,
 		class USkeletalMesh& InMesh
 	);

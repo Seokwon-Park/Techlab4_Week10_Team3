@@ -9,7 +9,7 @@ class FStaticMeshEditor : public FAssetEditor
 public:
 	FStaticMeshEditor(
 		class UEditorEngine& InEditorEngine,
-		class FEditorUI& InEditorUI,
+		class FEditorManager& InEditorManager,
 		const FString& InAssetPath,
 		class UStaticMesh& InMesh
 	);

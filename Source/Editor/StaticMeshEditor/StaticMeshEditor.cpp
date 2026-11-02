@@ -9,11 +9,11 @@
 
 FStaticMeshEditor::FStaticMeshEditor(
 	UEditorEngine& InEditorEngine,
-	FEditorUI& InEditorUI,
+	FEditorManager& InEditorManager,
 	const FString& InAssetPath,
 	UStaticMesh& InMesh
 )
-	: FAssetEditor(InEditorEngine, InEditorUI, InAssetPath)
+	: FAssetEditor(InEditorEngine, InEditorManager, InAssetPath)
 	, Mesh(&InMesh)
 {
 }

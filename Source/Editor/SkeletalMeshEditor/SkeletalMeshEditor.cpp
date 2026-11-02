@@ -23,11 +23,11 @@ FString GetBoneDisplayName(const FString& BoneName)
 
 FSkeletalMeshEditor::FSkeletalMeshEditor(
 	UEditorEngine& InEditorEngine,
-	FEditorUI& InEditorUI,
+	FEditorManager& InEditorManager,
 	const FString& InAssetPath,
 	USkeletalMesh& InMesh
 )
-	: FAssetEditor(InEditorEngine, InEditorUI, InAssetPath)
+	: FAssetEditor(InEditorEngine, InEditorManager, InAssetPath)
 	, Mesh(&InMesh)
 {
 }

@@ -150,37 +150,36 @@ void UBenchmarkEngine::InitEditorTools()
 	OutlineRenderer = MakeUnique<FOutlineRenderer>();
 	OutlineRenderer->Init(Renderer);
 
-	EditorUI = MakeUnique<FEditorUI>();
-	EditorUI->Init(true, true);
+	LevelEditorTab = MakeUnique<FLevelEditorTab>();
+	LevelEditorTab->SetDockSpaceOptions(true, true);
+	TabContainer.AddTab(LevelEditorTab.get());
 
 	// File 메뉴로 씬을 바꾼다. 기존 액터가 지워지므로 선택(기즈모·아웃라인·디테일)을 먼저 비운다.
 	// 아웃라이너 선택을 비우면 콜백으로 기즈모·아웃라인·디테일 선택도 함께 비워진다.
-	EditorUI->OnOpenScene.Add([this]()
+	LevelEditorTab->OnOpenScene.Add([this]()
 		{
 			OutlinerPanel->SelectActor(nullptr);
 			DetailsPanel->SelectComponent(nullptr);
 			FEditorFileUtils::LoadScene(World);
 		});
-	EditorUI->OnNewScene.Add([this]()
+	LevelEditorTab->OnNewScene.Add([this]()
 		{
 			OutlinerPanel->SelectActor(nullptr);
 			DetailsPanel->SelectComponent(nullptr);
 			FEditorFileUtils::NewScene(World);
 		});
 
-	FLevelEditorTab& LevelEditorTab = EditorUI->GetLevelEditorTab();
-
-	OutputLogPanel = LevelEditorTab.AddPanel<FOutputLogPanel>();
+	OutputLogPanel = LevelEditorTab->AddPanel<FOutputLogPanel>();
 	FLog::AddSink(OutputLogPanel);
 
-	DetailsPanel = LevelEditorTab.AddPanel<FDetailsPanel>();
+	DetailsPanel = LevelEditorTab->AddPanel<FDetailsPanel>();
 	DetailsPanel->SetWorld(World);
 
-	EditorControlsPanel = LevelEditorTab.AddPanel<FEditorControlsPanel>();
+	EditorControlsPanel = LevelEditorTab->AddPanel<FEditorControlsPanel>();
 	EditorControlsPanel->SetWorld(World);
 	EditorControlsPanel->SetGizmo(Gizmo.get());
 
-	OutlinerPanel = LevelEditorTab.AddPanel<FOutlinerPanel>();
+	OutlinerPanel = LevelEditorTab->AddPanel<FOutlinerPanel>();
 	OutlinerPanel->SetWorld(World);
 	OutlinerPanel->SetSelectionCallback(
 		[this](USceneComponent* Scene) { SelectScene(Scene); });
@@ -304,7 +303,7 @@ void UBenchmarkEngine::Tick(float DeltaTime)
 	World->Tick(DeltaTime);
 
 	EditorControlsPanel->DeltaTime = DeltaTime;
-	EditorUI->Tick(DeltaTime);
+	LevelEditorTab->Tick(DeltaTime);
 
 	const FMatrix ViewProjection = Camera->GetViewProjectionMatrix();
 	const FMatrix Projection = Camera->GetProjectionMatrix();
@@ -389,7 +388,7 @@ void UBenchmarkEngine::Tick(float DeltaTime)
 	{
 		SCOPE_CYCLE_COUNTER(STAT_ImGuiRender);
 		ImGuiRenderer->Begin();
-		EditorUI->OnRender();
+		TabContainer.OnRender(true);
 		DrawProfileOverlay();
 		ImGuiRenderer->End();
 	}

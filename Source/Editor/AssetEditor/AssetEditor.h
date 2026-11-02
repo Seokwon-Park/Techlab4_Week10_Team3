@@ -11,7 +11,7 @@ class FAssetEditor
 public:
 	FAssetEditor(
 		class UEditorEngine& InEditorEngine,
-		class FEditorUI& InEditorUI,
+		class FEditorManager& InEditorManager,
 		const FString& InAssetPath
 	);
 	virtual ~FAssetEditor();
@@ -63,7 +63,7 @@ protected:
 	virtual void ShutdownResources();
 
 	UEditorEngine& EditorEngine;
-	FEditorUI& EditorUI;
+	FEditorManager& EditorManager;
 	FPreviewScene PreviewScene;
 
 	TUniquePtr<FEditorViewportClient> ViewportClient;
