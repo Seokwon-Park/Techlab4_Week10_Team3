@@ -126,6 +126,53 @@ void FLineBatcher::AddPath(const TArray<FVector>& Points, const FVector4& Color)
 	}
 }
 
+void FLineBatcher::AddPyramid(const FVector& BaseCenter, const FVector& Tip, float HalfWidth, const FVector4& Color)
+{
+	const FVector Offset = Tip - BaseCenter;
+	if (Offset.SizeSquared() < 0.00000001f || HalfWidth <= 0.0f)
+	{
+		return;
+	}
+
+	// 축이 수직인 경우에도 외적이 영벡터가 되지 않도록 기준 축을 고릅니다.
+	const FVector Direction = Offset.Normalized();
+	const FVector Reference = fabsf(Direction.Z) < 0.99f ? FVector(0.0f, 0.0f, 1.0f) : FVector(0.0f, 1.0f, 0.0f);
+	const FVector Right = Direction.Cross(Reference).Normalized() * HalfWidth;
+	const FVector Up = Direction.Cross(Right).Normalized() * HalfWidth;
+	const FVector Corners[] = {
+		BaseCenter + Right + Up, BaseCenter - Right + Up,
+		BaseCenter - Right - Up, BaseCenter + Right - Up
+	};
+
+	for (int32 Index = 0; Index < 4; ++Index)
+	{
+		AddLine(Corners[Index], Corners[(Index + 1) % 4], Color);
+		AddLine(Corners[Index], Tip, Color);
+	}
+}
+
+void FLineBatcher::AddSphere(const FVector& Center, float Radius, const FVector4& Color, int32 Segments)
+{
+	if (Radius <= 0.0f || Segments < 3)
+	{
+		return;
+	}
+
+	for (int32 Index = 0; Index < Segments; ++Index)
+	{
+		const float AngleA = 2.0f * PI * static_cast<float>(Index) / Segments;
+		const float AngleB = 2.0f * PI * static_cast<float>(Index + 1) / Segments;
+		const float CosA = cosf(AngleA) * Radius;
+		const float SinA = sinf(AngleA) * Radius;
+		const float CosB = cosf(AngleB) * Radius;
+		const float SinB = sinf(AngleB) * Radius;
+
+		AddLine(Center + FVector(CosA, SinA, 0.0f), Center + FVector(CosB, SinB, 0.0f), Color);
+		AddLine(Center + FVector(CosA, 0.0f, SinA), Center + FVector(CosB, 0.0f, SinB), Color);
+		AddLine(Center + FVector(0.0f, CosA, SinA), Center + FVector(0.0f, CosB, SinB), Color);
+	}
+}
+
 void FLineBatcher::Flush()
 {
 	RenderCommand::BindPipelineState(PipelineState);
@@ -137,7 +184,10 @@ void FLineBatcher::Flush()
 
 void FLineBatcher::OnRender(const FMatrix& ViewProjection)
 {
-	//BuildVertexBuffer();
+	if (VertexCount == 0)
+	{
+		return;
+	}
 
 	FMatrix VP = ViewProjection;
 	RenderCommand::UpdateBufferData(VertexBuffer.get(), VertexBufferBase, sizeof(FLineBatchVertex) * VertexCount);

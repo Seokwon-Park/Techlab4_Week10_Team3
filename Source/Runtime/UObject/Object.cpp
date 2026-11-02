@@ -67,28 +67,6 @@ bool UObject::IsA(const UClass* Class) const
 	return ThisClass && ThisClass->IsChildOf(Class);
 }
 
-void UObject::Serialize(json& Handle, bool bIsLoading)
-{
-	// 타입별 처리는 각 FProperty 서브클래스가 한다 (Property.h)
-	for (UClass* c = GetClass(); c; c = c->Super)
-	{
-		for (const FProperty* Property : c->GetProperties())
-		{
-			if (Property->HasAnyFlags(CPF_Transient))
-				continue;
-
-			if (bIsLoading && !Handle.contains(Property->Name))
-				continue;
-
-			void* Value = Property->ContainerPtrToValuePtr(this);
-			if (bIsLoading)
-				Property->ImportJson(Handle[Property->Name], Value);
-			else
-				Property->ExportJson(Handle[Property->Name], Value);
-		}
-	}
-}
-
 void UObject::Serialize(FArchive& Ar)
 {
 	FBinaryArchiveFormatter Formatter(Ar);

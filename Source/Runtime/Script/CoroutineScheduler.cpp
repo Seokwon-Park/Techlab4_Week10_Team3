@@ -6,6 +6,7 @@
 #include "Script/LuaScriptManager.h"
 #include "Script/LuaActorRef.h"
 #include "GameFramework/Actor.h"
+#include "Engine/World.h"
 
 enum class EWaitKind
 {
@@ -33,14 +34,20 @@ struct FCoroutineScheduler::FMoveTask
 	float Speed = 1.0f;
 };
 
-FCoroutineScheduler& FCoroutineScheduler::Get()
+FCoroutineScheduler::FCoroutineScheduler(UWorld& InWorld)
+	: World(InWorld)
 {
-	static FCoroutineScheduler Instance;
-	return Instance;
 }
+
+FCoroutineScheduler::~FCoroutineScheduler() = default;
 
 void FCoroutineScheduler::Start(AActor* Owner, sol::function Func)
 {
+	if (!Owner || Owner->GetWorld() != &World)
+		return;
+
+	// 첫 실행 중 월드가 정리되면 반환 후 대기열에 다시 넣지 않는다.
+	const uint64 Generation = ResetGeneration;
 	sol::state& Lua = FLuaScriptManager::Get().GetState();
 
 	auto Co = MakeUnique<FCoroutine>();
@@ -49,7 +56,7 @@ void FCoroutineScheduler::Start(AActor* Owner, sol::function Func)
 	Func.push(Co->Thread.thread_state());
 
 	// 첫 yield는 바로 실행한다.
-	if (!Resume(*Co))
+	if (!Resume(*Co) || Generation != ResetGeneration)
 	{
 		return;	// yield 없이 끝났거나 에러
 	}
@@ -162,7 +169,7 @@ void FCoroutineScheduler::Tick(float DeltaTime)
 			break;
 		}
 
-		if (bReady && !Resume(C))
+		if (!C.bDead && bReady && !Resume(C))
 		{
 			C.bDead = true;
 		}
@@ -183,6 +190,25 @@ void FCoroutineScheduler::Tick(float DeltaTime)
 	}
 	Pending = TArray<TUniquePtr<FCoroutine>>();
 }
+
+void FCoroutineScheduler::Reset()
+{
+	++ResetGeneration;
+	Moves.Reset();
+	Pending.Reset();
+
+	// 실행 중인 Lua 스레드는 재개가 반환된 뒤 Tick에서 해제한다.
+	if (bTicking)
+	{
+		for (TUniquePtr<FCoroutine>& C : Coroutines)
+			C->bDead = true;
+	}
+	else
+	{
+		Coroutines.Reset();
+	}
+}
+
 void FCoroutineScheduler::StopAll(AActor* Owner)
 {
 	for (TUniquePtr<FCoroutine>& C : Coroutines)
@@ -210,6 +236,9 @@ void FCoroutineScheduler::StopAll(AActor* Owner)
 
 void FCoroutineScheduler::MoveTo(AActor* Owner, const FVector& Target, float Speed)
 {
+	if (!Owner || Owner->GetWorld() != &World)
+		return;
+
 	for (FMoveTask& M : Moves)
 	{
 		if (M.Owner.Ptr == Owner)

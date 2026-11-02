@@ -58,9 +58,6 @@ public:
 	// 경로가 있는(=에셋으로 등록된) 가장 가까운 원본. 자신이 에셋이면 자신
 	const UMaterial* GetBaseAsset() const;
 
-	static json SaveMaterial(const UMaterial* Material);
-	static UMaterial* LoadMaterial(const json& In);
-
 	const uint16 SortID;
 
 	using Super::Serialize;

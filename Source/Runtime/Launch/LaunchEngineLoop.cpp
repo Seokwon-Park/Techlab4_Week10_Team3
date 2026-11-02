@@ -17,6 +17,7 @@
 #include "Core/SplashScreen.h"
 #include "Core/Stats/LightweightStats.h"
 #include "Core/Async/TaskPool.h"
+#include "Tasks/Tasks.h"
 
 #include "UObject/UObjectGlobals.h"
 
@@ -167,11 +168,13 @@ bool FEngineLoop::Tick()
 void FEngineLoop::Exit()
 {
 	FTaskPool::Get().Shutdown();
-
+	Tasks::FTaskScheduler::Get().Shutdown();
 
 	if (GEngine)
 	{
 		GEngine->PreExit();
+		GEngine->ShutdownAudioDevice();   // 믹서 스레드를 먼저 멈춘 뒤 USoundWave를 지운다
+		
 	}
 
 	// UAssetManager도 UObject이므로 일괄 삭제 전에 종료한다.

@@ -10,6 +10,8 @@
 #include "Render/RenderResourceManager.h"
 
 #include "Asset/ObjImporter/ObjImporter.h"
+#include "Asset/FbxImporter/FbxMeshBake.h"
+#include "Render/SkeletalMesh.h"
 
 #include "Render/GeometryGenerator.h"
 #include "UObject/UObjectGlobals.h"
@@ -71,44 +73,10 @@ namespace
 		Mesh->VertexBuffer = std::move(VB);
 		Mesh->IndexBuffer = std::move(IB);
 
-		UMaterial* DefaultMaterial = UAssetManager::GetAssetByPath<UMaterial>("DefaultMaterial");
-		if (!DefaultMaterial)
+		// 빈 슬롯이면 위에서 Default 슬롯을 넣었으므로 원본(MeshData)이 아니라 Mesh->MeshData를 쓴다
+		if (!UAssetManager::BuildMaterialsFromSlots(Mesh->MeshData.MaterialSlots, Mesh->Materials))
 		{
 			return nullptr;
-		}
-
-		// MaterialSlots를 실제 UMaterial로 변환
-		for (const FStaticMaterialSlot& Slot : Mesh->MeshData.MaterialSlots)
-		{
-			UMaterial* Material = UMaterial::CreateInstance(DefaultMaterial);
-			if (!Material)
-			{
-				return nullptr;
-			}
-			Material->BaseColor = Slot.BaseColor;
-			if (Material->BaseColor.W < 1.0f)
-			{
-				Material->BlendState = EBlendState::AlphaBlend;
-				Material->DepthStencilState = EDepthStencilState::ReadOnly;
-			}
-
-			if (!Slot.DiffuseTexturePath.empty())
-			{
-				UTexture2D* Texture = UAssetManager::Get().LoadTexture(Slot.DiffuseTexturePath);
-
-				if (Texture)
-				{
-					Material->Textures[0] = Texture;
-				}
-			}
-
-			if (!Slot.NormalTexturePath.empty()) {
-				if (UTexture2D* NormalTexture{ UAssetManager::Get().LoadTexture(Slot.NormalTexturePath) }) {
-					Material->Textures[1] = NormalTexture;
-				}
-			}
-
-			Mesh->Materials.Add(Material);
 		}
 
 		Mesh->MeshData.BuildTriangleBVH();
@@ -189,6 +157,13 @@ void UAssetManager::LoadAsset(const FString& Key, const FString& Path) {
 	}
 	if (Extension == ".obj") {
 		LoadObjStaticMesh(Path);
+	}
+	// FBX Asset은 엔진 시작 시 원본 .fbx 대신 Import로 저장한 .fbx.bin만 로드한다.
+	// 원본 해석과 변경 여부 비교는 FFbxImporter::ImportToAssets에서만 수행하며,
+	// 이 로드 경로는 원본 파일이나 FBX SDK 없이 저장된 데이터로 렌더 자원을 만든다.
+	if (Extension == ".bin" && FFbxMeshBake::IsBakedPath(Path)) {
+		FString Error;
+		if (!LoadFbxMesh(Path, Error)) HTR_LOG(Error, "{}", Error);
 	}
 }
 
@@ -444,6 +419,30 @@ UStaticMesh* UAssetManager::LoadObjStaticMesh(const FString& Path)
 	return Mesh;
 }
 
+URenderAsset* UAssetManager::LoadFbxMesh(const FString& Path, FString& OutError)
+{
+	OutError.clear();
+	const FString Key = MakeAssetKey(Path);
+	if (auto* Cached = GetAssetByPath<URenderAsset>(Key)) return Cached;
+	FFbxBakedMesh Data;
+	if (!FFbxMeshBake::IsBakedPath(Path) || !FFbxMeshBake::Read(Path, Data, OutError))
+	{
+		if (OutError.empty()) OutError = "FBX binary: expected .fbx.bin: " + Path;
+		return nullptr;
+	}
+	URenderAsset* Asset = nullptr;
+	if (Data.Kind == EFbxMeshKind::Static) Asset = CreateStaticMesh(&Data.StaticMesh);
+	else
+	{
+		auto* Mesh = NewObject<USkeletalMesh>();
+		if (!Mesh->Build(std::move(Data.SkeletalMesh), OutError)) return nullptr;
+		Asset = Mesh;
+	}
+	if (!Asset) { OutError = "FBX binary: mesh resource creation failed: " + Path; return nullptr; }
+	Get().RegisterAsset(Key, Asset);
+	return Asset;
+}
+
 bool UAssetManager::ReorientStaticMesh(UStaticMesh& Mesh, const std::function<FVector(const FVector&)>& Rotate)
 {
 	if (Mesh.GetLODCount() > 1 || Mesh.MeshData.Vertices.IsEmpty())
@@ -537,4 +536,65 @@ FLODGenerateResult UAssetManager::GenerateStaticMeshLODs(UStaticMesh& Mesh, cons
 	Mesh.ScreenThresholds = Request.ScreenThresholds;
 	Mesh.RebuildRenderData();
 	return Result;
+}
+
+namespace
+{
+	template<typename TSlot>
+	bool BuildMaterialsFromSlotsImpl(const TArray<TSlot>& Slots, TArray<UMaterial*>& OutMaterials)
+	{
+		// MaterialSlots를 실제 UMaterial로 변환
+		UMaterial* DefaultMaterial = UAssetManager::GetAssetByPath<UMaterial>("DefaultMaterial");
+		if (!DefaultMaterial)
+		{
+			return false;
+		}
+
+		for (const TSlot& Slot : Slots)
+		{
+			UMaterial* Material = UMaterial::CreateInstance(DefaultMaterial);
+			if (!Material)
+			{
+				return false;
+			}
+			Material->BaseColor = Slot.BaseColor;
+			if (Material->BaseColor.W < 1.0f)
+			{
+				Material->BlendState = EBlendState::AlphaBlend;
+				Material->DepthStencilState = EDepthStencilState::ReadOnly;
+			}
+
+			if (!Slot.DiffuseTexturePath.empty())
+			{
+				UTexture2D* Texture = UAssetManager::Get().LoadTexture(Slot.DiffuseTexturePath);
+
+				if (Texture)
+				{
+					Material->Textures[0] = Texture;
+				}
+			}
+
+			if (!Slot.NormalTexturePath.empty())
+			{
+				if (UTexture2D* NormalTexture = UAssetManager::Get().LoadTexture(Slot.NormalTexturePath))
+				{
+					Material->Textures[1] = NormalTexture;
+				}
+			}
+
+			OutMaterials.Add(Material);
+		}
+		return true;
+	}
+
+}
+
+bool UAssetManager::BuildMaterialsFromSlots(const TArray<FStaticMaterialSlot>& Slots, TArray<UMaterial*>& OutMaterials)
+{
+	return BuildMaterialsFromSlotsImpl(Slots, OutMaterials);
+}
+
+bool UAssetManager::BuildMaterialsFromSlots(const TArray<FSkeletalMaterialSlot>& Slots, TArray<UMaterial*>& OutMaterials)
+{
+	return BuildMaterialsFromSlotsImpl(Slots, OutMaterials);
 }

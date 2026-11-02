@@ -73,6 +73,7 @@ public:
 		return Data ? Data->AABB : Super::CalcLocalBounds();
 	}
 
+	virtual FPrimitiveSceneProxy* CreateSceneProxy();
 	FPrimitiveSceneProxy* GetSceneProxy() const { return SceneProxy; }
 
 	void MarkRenderStateDirty() override;

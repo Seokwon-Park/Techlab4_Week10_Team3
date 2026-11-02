@@ -162,6 +162,8 @@ void FSceneRenderer::InitViews(FRenderer* Renderer, const FSceneRenderOptions& O
 		return;
 	}
 
+	CachedViewContext.bShowSkeletalMesh = Options.bShowSkeletalMesh;
+
 	// 월드 프리미티브 수집 및 절두체 컬링
 	GatherRenderPackets(World->GetScene(), RenderData, CachedViewContext, &View.Frustum, Renderer);
 	RenderData.AmbientLight = World->GetScene().GetSkyAmbientLight(View.bGameView);
@@ -1112,6 +1114,9 @@ void FSceneRenderer::GatherRenderPackets(FScene& Scene, FSceneRenderData& Data,
 				if (!Primitive || !Primitive->IsVisible())
 					continue;
 
+				if (Proxy->IsSkinned() && !View.bShowSkeletalMesh)
+					continue;
+
 				const uint32 FirstNew = RenderQueue.Num();
 
 				// 프록시 캐시가 없는 스태틱 메시는 기존처럼 LOD를 골라 제출하고, 그 외는 컴포넌트에 맡긴다.
@@ -1123,7 +1128,7 @@ void FSceneRenderer::GatherRenderPackets(FScene& Scene, FSceneRenderData& Data,
 				}
 				else
 				{
-					Primitive->SubmitToRenderQueue(RenderQueue, View);
+					Proxy->GetDynamicMeshElements(RenderQueue, View); 
 				}
 
 				// continue 없이 항상 여기까지 와서 새 패킷에 여유 칸을 배정한다.

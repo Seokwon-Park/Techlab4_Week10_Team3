@@ -21,6 +21,7 @@
 #include "Components/ExponentialHeightFogComponent.h"
 
 #include "Components/StaticMeshComponent.h"
+#include "Components/SkinnedMeshComponent.h"
 #include "Asset/LOD/StaticMeshLODSelector.h"
 
 #include "Math/Frustum.h"
@@ -61,6 +62,11 @@ DECLARE_CYCLE_STAT("Frustum Cull", STAT_FrustumCull);
 DECLARE_CYCLE_STAT("Gather Elements", STAT_GatherElements);
 DECLARE_CYCLE_STAT("Gather - LOD", STAT_GatherLOD);
 DECLARE_CYCLE_STAT("Gather - Submit", STAT_GatherSubmit);
+
+UWorld::UWorld()
+	: CoroutineScheduler(*this)
+{
+}
 
 UWorld::~UWorld()
 {
@@ -127,70 +133,60 @@ AActor* UWorld::SpawnActor(UClass* Class, FName InName, const FTransform* Transf
 
 void UWorld::Tick(float RealDeltaTime)
 {
-	RealTimeSeconds += RealDeltaTime;
-
+	// Hit Stop 시간 흐름
 	if (HitStopTimeRemaining > 0.0f)
 	{
 		HitStopTimeRemaining = std::max(HitStopTimeRemaining - RealDeltaTime, 0.0f);
 	}
 
 	const float DeltaTime = RealDeltaTime * GetEffectiveTimeDilation();
+	RealTimeSeconds += RealDeltaTime;
 
+	// World 시간 흐름
 	if (!bIsPaused)
 	{
 		TimeSeconds += DeltaTime;
 	}
 
+	// 모든 SceneComponent의 Transform 갱신
 	{
 		SCOPE_CYCLE_COUNTER(STAT_UpdateAllTransforms);
 		Scene.UpdateAllTransforms();
 	}
 
-	// 에디터 월드가 아니면 액터 틱을 돌린다
-	if (WorldType != EWorldType::Editor)
+	if (IsGameWorld())
 	{
-		while (!BeginPlayList.IsEmpty())
-		{
-			AActor* Actor = BeginPlayList.Peek();
-			BeginPlayList.Dequeue();
-			if (Actor) Actor->BeginPlay();
-		}
-
-		if (!bIsPaused)
-		{
-			SCOPE_CYCLE_COUNTER(STAT_ActorTick);
-			// 모든 Actor를 도는 대신 등록된 Tick 함수만 실행한다
-			TickTaskManager.RunAllTickGroups(DeltaTime);
-			FCoroutineScheduler::Get().Tick(DeltaTime);
-
-			UpdateOverlaps();
-			FLuaBindings::FlushPendingDestroy(this);
-			if (PlayerController) PlayerController->UpdateCameraManager(DeltaTime);
-		}
+		GameWorldTick(DeltaTime);
 	}
-	else
+
+	if (WorldType == EWorldType::Editor)
 	{
-		// 에디터 월드에서도 파티클 시뮬레이션은 틱이 돌아야 한다
-		for (TObjectIterator<UParticleSubUVComponent> Comp; Comp; ++Comp)
+		EditorWorldTick(DeltaTime);
+	}
+	
+	if (WorldType == EWorldType::EditorPreview)
+	{
+		PreviewWorldTick(DeltaTime);
+	}
+
+	// 월드 Tick에서 변경된 변환과 바운드를 렌더링 전에 반영합니다.
+	{
+		SCOPE_CYCLE_COUNTER(STAT_UpdateAllTransforms);
+		Scene.UpdateAllTransforms();
+	}
+}
+
+void UWorld::GameWorldTick(float DeltaTime)
+{
+	// 새로운 Actor들의 BeginPlay 실행
+	while (!BeginPlayList.IsEmpty())
+	{
+		AActor* Actor = BeginPlayList.Peek();
+		BeginPlayList.Dequeue();
+
+		if (Actor)
 		{
-			if (!Comp || !Comp->IsRegistered() || Comp->GetWorld() != this)
-			{
-				continue;
-			}
-			if (Comp->GetParticlesForView().IsEmpty())
-			{
-				Comp->SetParticles(10);
-			}
-			Comp->TickComponent(DeltaTime);
-		}
-		// 스프링 암 컴포넌트도 에디터에서 틱이 돌아야 한다
-		for (TObjectIterator<USpringArmComponent> Comp; Comp; ++Comp)
-		{
-			if (!Comp || !Comp->IsRegistered() || Comp->GetWorld() != this)
-			{
-				continue;
-			}
-			Comp->UpdateInEditor();
+			Actor->BeginPlay();
 		}
 		for (TObjectIterator<UDecalComponent> Comp; Comp; ++Comp)
 		{
@@ -202,18 +198,90 @@ void UWorld::Tick(float RealDeltaTime)
 		}
 	}
 
+	// 일시 정지 상태라면, 스킵
+	if (bIsPaused)
+	{
+		return;
+	}
+
+	// 모든 Actor를 도는 대신 등록된 Tick 함수만 실행한다
+	{
+		SCOPE_CYCLE_COUNTER(STAT_ActorTick);
+		TickTaskManager.RunAllTickGroups(DeltaTime);
+	}
+
+	// 코루틴 Tick
+	CoroutineScheduler.Tick(DeltaTime);
+
+	// ShapeComponent 충돌 처리
+	UpdateOverlaps();
+
+	// Lua Script 제거 처리
+	FLuaBindings::FlushPendingDestroy(this);
+
+	// 플레이어 카메라 업데이트
+	if (PlayerController)
+	{
+		PlayerController->UpdateCameraManager(DeltaTime);
+	}
+}
+
+void UWorld::EditorWorldTick(float DeltaTime)
+{
+	// Editor World에서 실행
+
+	// 에디터 월드에서도 파티클 시뮬레이션은 틱이 돌아야 한다
+	for (TObjectIterator<UParticleSubUVComponent> Comp; Comp; ++Comp)
+	{
+		if (!Comp || !Comp->IsRegistered() || Comp->GetWorld() != this)
+		{
+			continue;
+		}
+
+		if (Comp->GetParticlesForView().IsEmpty())
+		{
+			Comp->SetParticles(10);
+		}
+
+		Comp->TickComponent(DeltaTime);
+	}
+
+	// 스프링 암 컴포넌트도 에디터에서 틱이 돌아야 한다
+	for (TObjectIterator<USpringArmComponent> Comp; Comp; ++Comp)
+	{
+		if (!Comp || !Comp->IsRegistered() || Comp->GetWorld() != this)
+		{
+			continue;
+		}
+
+		Comp->UpdateInEditor();
+	}
+}
+
+void UWorld::PreviewWorldTick(float DeltaTime)
+{
+	// 스킨드 메시 컴포넌트의 본이 수정되면 갱신되어야 함
+	for (TObjectIterator<USkinnedMeshComponent> Comp; Comp; ++Comp)
+	{
+		if (!Comp || !Comp->IsRegistered() || Comp->GetWorld() != this)
+		{
+			continue;
+		}
+
+		Comp->TickComponent(DeltaTime);
+	}
 
 }
 
 void UWorld::ClearWorld()
 {
 	EndPlay();
+
 	// BeginPlay 대기 중인 Actor 제거
 	while (!BeginPlayList.IsEmpty())
 	{
 		BeginPlayList.Dequeue();
 	}
-
 	
 	for (ULevel* Level : Levels)
 	{
@@ -227,6 +295,8 @@ void UWorld::ClearWorld()
 		}
 		Level->ClearActors();
 	}
+	// 액터 EndPlay에서 새로 등록한 작업까지 최종 정리한다.
+	CoroutineScheduler.Reset();
 	// 액터를 지우기 전에 렌더 프록시와 틱 등록부터 푼다. ClearActors는 액터를 delete만 하므로,
 	// 그대로 두면 지워진 컴포넌트를 가리키는 프록시가 FScene에 남아 다음 프레임에 터진다.
 	Scene.RemoveAllLights();
@@ -441,7 +511,7 @@ void UWorld::GatherRenderPackets(FRenderQueue& RenderQueue, const FViewContext* 
 				}
 				else
 				{
-					Primitive->SubmitToRenderQueue(RenderQueue, LODView ? *LODView : FViewContext{});
+					Proxy->GetDynamicMeshElements(RenderQueue, LODView ? *LODView : FViewContext{});
 				}
 
 				// continue 없이 항상 여기까지 와서 새 패킷에 여유 칸을 배정한다.
@@ -834,6 +904,7 @@ void UWorld::BeginPlay()
 
 void UWorld::EndPlay()
 {
+	CoroutineScheduler.Reset();
 	bBegunPlay = false;
 	if (PlayerController)
 	{
