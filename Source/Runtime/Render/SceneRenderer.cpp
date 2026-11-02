@@ -632,26 +632,9 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					if (!DecalPipeline || !DecalPipeline->Shader) return;
 
 					FConstantBuffer* Constants = Renderer->GetDecalConstants();
-					uint32 ReceiverItems = 0;
 					TArray<FMeshDrawBatch> DecalBatches;
 					DecalBatches.Reserve(ForwardBatches.Num());
 					FDecalData Data{};
-
-					for (const FMeshDrawBatch& Src : ForwardBatches) {
-						FMeshDrawBatch Batch = Src;
-						Batch.Items.Reset();
-						for (const FMeshDrawBatch::FItem& Item : Src.Items) {
-							if (Item.bReceivesDecals) {
-								Batch.Items.Push(Item);
-							}
-						}
-
-						if (Batch.Items.IsEmpty()) continue;
-						Batch.Pipeline = *DecalPipeline;
-						Batch.Sampler = ESamplerState::LinearClamp;
-						ReceiverItems += Batch.Items.Num();
-						DecalBatches.Push(std::move(Batch));
-					}
 
 					const FScene& Scene = World->GetScene();
 					RenderData.RenderStats.DecalCount = Scene.Decals.Num();
@@ -670,9 +653,27 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 						RenderCommand::UpdateBufferData(Constants, &Data, sizeof(Data));
 						RenderCommand::BindConstantBuffer(1, Constants, EShaderBindFlagBits::Pixel);
 
+						DecalBatches.Reset();
+						uint32 ReceiverItems = 0;
 
-						for (FMeshDrawBatch& Batch : DecalBatches) {
+						for (const FMeshDrawBatch& Src : ForwardBatches) {
+							FMeshDrawBatch Batch = Src;
+							Batch.Items.Reset();
+
+							for (const FMeshDrawBatch::FItem& Item : Src.Items) {
+								if (Item.bReceivesDecals) {
+									Batch.Items.Push(Item);
+								}
+							}
+
+							if (Batch.Items.IsEmpty()) continue;
+
+							Batch.Pipeline = *DecalPipeline;
+							Batch.Sampler = ESamplerState::LinearClamp;
 							Batch.Textures = { { Decal->GetDecalTexture(), EShaderBindFlagBits::Pixel } };
+							ReceiverItems += Batch.Items.Num();
+							DecalBatches.Push(std::move(Batch));
+
 						}
 
 						Renderer->DrawMeshes(DecalBatches);

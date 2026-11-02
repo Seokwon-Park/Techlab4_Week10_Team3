@@ -188,14 +188,6 @@ void UWorld::GameWorldTick(float DeltaTime)
 		{
 			Actor->BeginPlay();
 		}
-		for (TObjectIterator<UDecalComponent> Comp; Comp; ++Comp)
-		{
-			if (!Comp || !Comp->IsRegistered() || Comp->GetWorld() != this)
-			{
-				continue;
-			}
-			Comp->UpdateInEditor();
-		}
 	}
 
 	// 일시 정지 상태라면, 스킵
@@ -254,6 +246,16 @@ void UWorld::EditorWorldTick(float DeltaTime)
 			continue;
 		}
 
+		Comp->UpdateInEditor();
+	}
+
+
+	for (TObjectIterator<UDecalComponent> Comp; Comp; ++Comp)
+	{
+		if (!Comp || !Comp->IsRegistered() || Comp->GetWorld() != this)
+		{
+			continue;
+		}
 		Comp->UpdateInEditor();
 	}
 }
