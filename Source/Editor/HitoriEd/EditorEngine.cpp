@@ -180,8 +180,8 @@ bool UEditorEngine::Init()
 	ContentDrawerPanel->SetCreateWidgetCallback([this](const FString& Path) { UIEditorPanel->NewAsset(Path); });
 	ContentDrawerPanel->SetOpenWidgetCallback([this](const FString& Path) { UIEditorPanel->OpenAsset(Path); });
 
-	// StaticMesh Editor Callback
-	ContentDrawerPanel->SetOpenObjCallback([this](const FString& Path) { EditorManager->OpenEditor(Path); });
+	// StaticMesh / SkeletalMesh Viewer 열기
+	ContentDrawerPanel->SetOpenMeshCallback([this](const FString& Path) { EditorManager->OpenEditor(Path); });
 
 	Outline = MakeUnique<FOutline>();
 

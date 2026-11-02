@@ -150,7 +150,7 @@ void FPreviewScene::Setup()
 		if (DirectionalLightComponent)
 		{
 			DirectionalLightComponent->SetIntensity(0.5f);
-			DirectionalLightComponent->SetRelativeRotation(FVector{0.0f, 25.0f, 35.0f});
+			DirectionalLightComponent->SetRelativeRotation(FRotator{40.0f, 230.0f, 0.0f});
 		}
 	}
 

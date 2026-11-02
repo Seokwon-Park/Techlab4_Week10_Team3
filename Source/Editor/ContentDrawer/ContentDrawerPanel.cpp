@@ -1,6 +1,7 @@
 #include "EnginePCH.h"
 #include "Editor/ContentDrawer/ContentDrawerPanel.h"
 #include "Asset/AssetManager.h"
+#include "Asset/FbxImporter/FbxMeshBake.h"
 #include "Text/Font.h"
 #include "Editor/HitoriEd/EditorDragDrop.h"
 
@@ -186,9 +187,9 @@ void FContentDrawerPanel::OnRender()
 						OnOpenWidget(PathString);
 					}
 
-					else if (Path.extension() == ".obj" && OnOpenObj)
+					else if ((Path.extension() == ".obj" || FFbxMeshBake::IsBakedPath(PathString)) && OnOpenMesh)
 					{
-						OnOpenObj(PathString);
+						OnOpenMesh(PathString);
 					}
 					
 				}

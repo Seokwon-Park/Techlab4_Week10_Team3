@@ -5,6 +5,7 @@
 #include "Editor/SkeletalMeshEditor/SkeletalMeshEditor.h"
 #include "Asset/AssetManager.h"
 #include "Asset/AssetUtils.h"
+#include "Asset/FbxImporter/FbxMeshBake.h"
 #include "Render/Mesh.h"
 #include "Render/SkeletalMesh.h"
 #include <filesystem>
@@ -79,6 +80,18 @@ void FEditorManager::CreateEditor(const FString& AssetPath)
 		Asset = UAssetManager::LoadObjStaticMesh(FilePath);
 	}
 
+	// 베이크된 FBX는 파일에 기록된 실제 메시 타입으로 로드합니다.
+	if (!Asset && FFbxMeshBake::IsBakedPath(FilePath))
+	{
+		FString Error;
+		Asset = UAssetManager::LoadFbxMesh(FilePath, Error);
+		if (!Asset)
+		{
+			HTR_LOG(Warning, "Failed to load mesh preview: {} ({})", AssetPath, Error);
+			return;
+		}
+	}
+
 	if (!Asset)
 	{
 		HTR_LOG(Warning, "Asset is not loaded or could not be loaded: {}", AssetPath.c_str());
@@ -97,7 +110,7 @@ void FEditorManager::CreateEditor(const FString& AssetPath)
 	if (Asset->IsA<USkeletalMesh>())
 	{
 		USkeletalMesh* MeshAsset = Cast<USkeletalMesh>(Asset);
-		Editor = MakeUnique<FSkeletalMeshEditor>(EditorEngine, EditorUI, AssetPath/*, *MeshAsset*/);
+		Editor = MakeUnique<FSkeletalMeshEditor>(EditorEngine, EditorUI, AssetPath, *MeshAsset);
 	}
 
 	// 지원하지 않는 타입

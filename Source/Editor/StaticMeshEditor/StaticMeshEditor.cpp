@@ -57,7 +57,7 @@ bool FStaticMeshEditor::InitializeResources()
 
 	// 새로운 ViewportClient 생성
 	ViewportClient = MakeUnique<FEditorViewportClient>(PreviewScene);
-	ViewportClient->SetViewRotation(FRotator(20.0f, 45.0f, 0.0f));
+	ViewportClient->SetViewRotation(FRotator(30.0f, 210.0f, 0.0f));
 
 	// 카메라를 메시에 포커싱
 	FocusMesh();
