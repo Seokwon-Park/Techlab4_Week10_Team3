@@ -10,6 +10,7 @@ class UDecalComponent : public USceneComponent
 	GENERATED_BODY()
 public:
 	void TickComponent(float DeltaTime) override;
+	void UpdateInEditor() { Fade = 1.0f; }
 
 	UDecalComponent() { PrimaryComponentTick.bCanEverTick = true; }
 	UTexture2D* GetDecalTexture() const { return DecalTexture; }

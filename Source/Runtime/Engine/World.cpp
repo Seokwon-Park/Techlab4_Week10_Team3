@@ -192,6 +192,14 @@ void UWorld::Tick(float RealDeltaTime)
 			}
 			Comp->UpdateInEditor();
 		}
+		for (TObjectIterator<UDecalComponent> Comp; Comp; ++Comp)
+		{
+			if (!Comp || !Comp->IsRegistered() || Comp->GetWorld() != this)
+			{
+				continue;
+			}
+			Comp->UpdateInEditor();
+		}
 	}
 
 

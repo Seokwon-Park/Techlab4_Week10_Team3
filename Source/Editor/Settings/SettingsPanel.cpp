@@ -46,6 +46,7 @@ void FSettingsPanel::OnRender()
 	ImGui::Checkbox("Cache Shadows", &Settings.bCacheShadows);
 	ImGui::Checkbox("Draw Bounding Box", &Settings.bDrawBoundingBox);
 	ImGui::Checkbox("Show Object UUID", &Settings.bShowUUID);
+	ImGui::Checkbox("Draw Decals", &Settings.bDrawDecals);
 	const char* RenderingPaths[] = { "Forward", "Deferred" };
 	int RenderingPathIndex = static_cast<int>(Settings.RenderingPath);
 	ImGui::SetNextItemWidth(200.0f);
@@ -188,6 +189,7 @@ bool FSettingsPanel::SaveSettings() const
 	File << "PcfMode=" << static_cast<uint32_t>(Settings.PcfMode) << "\n";
 	File << "DrawBoundingBox=" << Settings.bDrawBoundingBox << "\n";
 	File << "ShowUUID=" << Settings.bShowUUID << "\n";
+	File << "DrawDecals=" << Settings.bDrawDecals << "\n";
 	File << "DrawBatchLine=" << Settings.bDrawBatchLine << "\n";
 	File << "DrawCascadeBounds=" << Settings.bDrawCascadeBounds << "\n";
 	File << "DrawPSGrid=" << Settings.bDrawPSGrid << "\n";
@@ -338,6 +340,7 @@ bool FSettingsPanel::LoadSettings()
 				}
 				else if (Key == "DrawBoundingBox") Settings.bDrawBoundingBox = std::stoi(ValueStr);
 				else if (Key == "ShowUUID") Settings.bShowUUID = std::stoi(ValueStr);
+				else if (Key == "DrawDecals") Settings.bDrawDecals = std::stoi(ValueStr);
 				else if (Key == "DrawBatchLine") Settings.bDrawBatchLine = std::stoi(ValueStr);
 				else if (Key == "DrawCascadeBounds") Settings.bDrawCascadeBounds = std::stoi(ValueStr);
 				else if (Key == "DrawPSGrid") Settings.bDrawPSGrid = std::stoi(ValueStr);

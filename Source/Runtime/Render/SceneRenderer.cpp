@@ -612,6 +612,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			UnbindForwardLighting(Renderer);
 		})) return false;
 
+		if (Options.bDrawDecals)
 		{
 			FRenderGraphRasterPassDesc Decal{};
 			Decal.Name = "Decal";
