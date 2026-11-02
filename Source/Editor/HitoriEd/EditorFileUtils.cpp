@@ -4,8 +4,39 @@
 #include "Core/EngineLog.h"
 #include <commdlg.h>
 #include "Serialization/JsonArchive.h"
+#include "Editor/Asset/FbxImporter/FbxImporter.h"
  
 FString FEditorFileUtils::CurrentScenePath = "";
+
+void FEditorFileUtils::ImportFbx(EFbxImportMode Mode)
+{
+	wchar_t FilePath[32768] = {};
+	OPENFILENAMEW Dialog = {};
+	Dialog.lStructSize = sizeof(Dialog);
+	Dialog.hwndOwner = GetActiveWindow();
+	Dialog.lpstrFile = FilePath;
+	Dialog.nMaxFile = static_cast<DWORD>(std::size(FilePath));
+	Dialog.lpstrFilter = L"FBX Files (*.fbx)\0*.fbx\0";
+	Dialog.lpstrTitle = Mode == EFbxImportMode::Static ? L"Import Static Mesh" : L"Import Skeletal Mesh";
+	Dialog.Flags = OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST | OFN_NOCHANGEDIR;
+	if (!GetOpenFileNameW(&Dialog))
+	{
+		const DWORD Error = CommDlgExtendedError();
+		if (Error != 0) HTR_LOG(Error, "FBX file dialog failed: {}", Error);
+		return;
+	}
+
+	// 파일 선택의 UTF-16 경로를 Importer가 받는 UTF-8로 변환한다.
+	const auto Utf8 = std::filesystem::path(FilePath).generic_u8string();
+	FFbxImportResult Result;
+	FString Error;
+	if (!FFbxImporter::ImportToAssets(FString(Utf8.begin(), Utf8.end()), Mode, Result, Error))
+	{
+		HTR_LOG(Error, "FBX Import failed: {}", Error);
+		MessageBoxW(Dialog.hwndOwner, L"FBX를 가져오지 못했습니다. Output Log에서 오류를 확인하세요.", L"FBX Import", MB_OK | MB_ICONERROR);
+	}
+	// 성공·skip·경고는 Importer가 기록하므로 여기서 다시 출력하지 않는다.
+}
 
 bool FEditorFileUtils::NewScene(UWorld* World)
 {

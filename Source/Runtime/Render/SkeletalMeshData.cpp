@@ -73,7 +73,7 @@ bool FSkeletalMeshData::Validate(FString& OutError) const
 		}
 	}
 
-	for (const FStaticMeshSection& Section : Sections)
+	for (const FSkeletalMeshSection& Section : Sections)
 	{
 		if (static_cast<uint64>(Section.StartIndex) + Section.IndexCount > static_cast<uint64>(Indices.Num()))
 		{
@@ -194,13 +194,13 @@ FSkeletalMeshData MakeTestBoneStick(int32 Segments, float SegmentLength)
 		AddStickQuad(Data, Base, Base + 1, Base + 2, Base + 3, N);
 	}
 
-	FStaticMeshSection Section;
+	FSkeletalMeshSection Section;
 	Section.StartIndex = 0;
 	Section.IndexCount = static_cast<uint32>(Data.Indices.Num());
 	Section.MaterialSlotIndex = 0;
 	Data.Sections.Add(Section);
 
-	FStaticMaterialSlot Slot;
+	FSkeletalMaterialSlot Slot;
 	Slot.Name = "TestBoneStick";
 	Data.MaterialSlots.Add(Slot);
 

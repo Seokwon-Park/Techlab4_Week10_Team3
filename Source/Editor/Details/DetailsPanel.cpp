@@ -6,6 +6,7 @@
 #include "Editor/HitoriEd/EditorDragDrop.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SkinnedMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/ParticleSubUVComponent.h"
 #include "Components/SpotLightComponent.h"
@@ -336,6 +337,30 @@ namespace
 			}
 			ImGui::EndCombo();
 		}
+	}
+
+	void DrawSkeletalMeshSlot(USkinnedMeshComponent* Component)
+	{
+		USkeletalMesh* Current = Component->GetSkeletalMesh();
+		const FString CurrentPath = Current ? Current->GetPath() : "";
+		const FString CurrentName = Current ? (CurrentPath.empty() ? Current->GetName() : GetAssetDisplayName(CurrentPath)) : "None";
+		ImGui::SetNextItemWidth(-1.0f);
+		const bool bOpen = ImGui::BeginCombo("##SkeletalMesh", CurrentName.c_str());
+		if (ImGui::IsItemHovered() && Current) ImGui::SetTooltip("%s", CurrentPath.c_str());
+		if (!bOpen) return;
+		if (ImGui::Selectable("None", Current == nullptr)) Component->SetSkeletalMesh(nullptr);
+		for (TObjectIterator<USkeletalMesh> Itr; Itr; ++Itr)
+		{
+			const FString Path = Itr->GetPath();
+			if (Path.empty()) continue;
+			const bool bSelected = *Itr == Current;
+			ImGui::PushID(*Itr);
+			if (ImGui::Selectable(GetAssetDisplayName(Path).c_str(), bSelected)) Component->SetSkeletalMesh(*Itr);
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", Path.c_str());
+			if (bSelected) ImGui::SetItemDefaultFocus();
+			ImGui::PopID();
+		}
+		ImGui::EndCombo();
 	}
 
 	void DrawMeshSlot(UObject* Owner, UStaticMesh** StaticMeshPtr)
@@ -1092,6 +1117,11 @@ void FDetailsPanel::OnRender()
 			ImGui::PushID(TargetComponent);
 			ImGui::SeparatorText("Component Properties");
 			DrawProperties(TargetComponent, CustomFont);
+			if (auto* Component = Cast<USkinnedMeshComponent>(TargetComponent))
+			{
+				ImGui::TextUnformatted("Skeletal Mesh");
+				DrawSkeletalMeshSlot(Component);
+			}
 			DrawShadowPreview();
 
 			if (SelectCandidateComponent != TargetComponent)

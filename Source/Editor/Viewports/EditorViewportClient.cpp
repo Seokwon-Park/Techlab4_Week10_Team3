@@ -8,8 +8,42 @@
 #include "Camera/ViewportCameraMovement.h"
 #include "Math/EngineMath.h"
 #include "Render/RenderCommand.h"
+#include "Editor/AssetEditor/FPreviewScene.h"
+#include "Math/BoxSphereBounds.h"
 
 FEditorViewportClient::FEditorViewportClient() {}
+
+FEditorViewportClient::FEditorViewportClient(FPreviewScene& InPreviewScene)
+    : PreviewScene(&InPreviewScene) {}
+
+UWorld* FEditorViewportClient::GetWorld() const {
+  return PreviewScene ? PreviewScene->GetWorld() : World;
+}
+
+void FEditorViewportClient::SetWorld(UWorld* InWorld) {
+  // AssetEditor Viewport인 경우, SetWorld를 무시
+  // PreviewScene이 World를 직접 관리해야함
+  if (PreviewScene) {
+    return;
+  }
+
+  if (World != InWorld) {
+    RenderData.ResetScene();
+    World = InWorld;
+  }
+}
+
+void FEditorViewportClient::FocusOnBounds(const FBoxSphereBounds& Bounds) {
+  const float Radius = FMath::Max(FMath::Max(Bounds.SphereRadius, Bounds.BoxExtent.Size()), 0.1f);
+  const float Aspect = FMath::Max(AspectRatio, 0.01f);
+  const float HalfFOV = FMath::DegreesToRadians(FMath::Clamp(ViewFOV, 1.0f, 179.0f)) * 0.5f;
+  const float LimitingHalfFOV = atanf(tanf(HalfFOV) * FMath::Min(Aspect, 1.0f));
+  const float Distance = FMath::Max(Radius * 1.1f / sinf(LimitingHalfFOV), Radius + NearClip);
+
+  OrthoWidth = Radius * 2.2f * FMath::Max(Aspect, 1.0f);
+  ViewLocation = Bounds.Origin - GetViewForward() * Distance;
+  FarClip = FMath::Max(FarClip, Distance + Radius * 2.0f);
+}
 
 void FEditorViewportClient::TickInput(float DeltaTime, bool bCaptured,
                                       bool bHovered, int32 WheelDelta,
@@ -56,7 +90,8 @@ void FEditorViewportClient::UpdateGizmoAndPicking(
   if (FInputSystem::IsMousePressed(EMouseButton::Left) && !InGizmo->IsUsing() &&
       InGizmo->GetHoveredAxis() < 0) {
     FHitResult Hit;
-    if (World && World->LineTraceSingle(Ray, Hit)) {
+    UWorld* PickingWorld = GetWorld();
+    if (PickingWorld && PickingWorld->LineTraceSingle(Ray, Hit)) {
       if (Hit.HitComponent && Hit.HitComponent->GetOwner()) {
         if (OnSelectActor) {
           OnSelectActor(Hit.HitComponent->GetOwner());
@@ -182,6 +217,10 @@ FSceneView FEditorViewportClient::CalcSceneView() const {
 // 뷰포트 크기 변경 및 타깃 생성
 void FEditorViewportClient::Resize(const uint32 InWidth,
                                    const uint32 InHeight) {
+  if (InWidth == 0 || InHeight == 0) {
+    return;
+  }
+
   if (Width == InWidth && Height == InHeight &&
       ViewTargets.IsValidFor(InWidth, InHeight)) {
     return;

@@ -1,9 +1,13 @@
 #pragma once
 
-#include "Editor/EditorUI/EditorPanel.h"
-#include "Editor/LevelEditor/LevelEditorToolbar.h"
+#include "Core/Delegate/Delegate.h"
+#include "Editor/EditorUI/EditorTabContainer.h"
+#include "Editor/LevelEditor/LevelEditorTab.h"
+#include "Runtime/Asset/FbxImporter/FbxMeshBake.h"
 
 #include <functional>
+
+enum class EFbxImportMode : uint32;
 
 class FEditorUI
 {
@@ -12,26 +16,26 @@ public:
 	void Tick(float DeltaTime);
 	void OnRender();
 
-	template <typename T>
-	T* AddEditorPanel()
-	{
-		TUniquePtr<T> newPanel = MakeUnique<T>();
-		T* Ret = newPanel.get();
-		Ret->Init();
-		Panels.Add(std::move(newPanel));
+	// 같은 애셋의 중복 생성 여부와 탭의 수명은 호출자가 관리한다.
+	void AddEditorTab(IEditorTab* Tab) { TabContainer.AddTab(Tab); }
+	void RemoveEditorTab(IEditorTab* Tab) { TabContainer.RemoveTab(Tab); }
+	void ActivateEditorTab(IEditorTab* Tab) { TabContainer.ActivateTab(Tab); }
+	void RequestCloseEditorTab(IEditorTab* Tab) { TabContainer.RequestCloseTab(Tab); }
 
-		return Ret;
-	}
+	IEditorTab* GetMainSelectedTab() const { return TabContainer.GetMainSelectedTab(); }
+	IEditorTab* GetFocusedTab() const { return TabContainer.GetFocusedTab(); }
 
-	FLevelEditorToolbar* GetToolbar() const { return Toolbar.get(); }
+	FLevelEditorTab& GetLevelEditorTab() { return LevelEditorTab; }
 
-	void SetNewSceneCallback(std::function<void()> InCallback) { OnNewScene = InCallback; }
-	void SetOpenSceneCallback(std::function<void()> InCallback) { OnOpenScene = InCallback; }
-	void SetSaveSceneCallback(std::function<void()> InCallback) { OnSaveScene = InCallback; }
-	void SetSaveSceneAsCallback(std::function<void()> InCallback) { OnSaveSceneAs = InCallback; }
-	void SetPackageGameCallback(std::function<void()> InCallback) { OnPackageGame = InCallback; }
+	TDelegate<> OnNewScene;
+	TDelegate<> OnOpenScene;
+	TDelegate<> OnSaveScene;
+	TDelegate<> OnSaveSceneAs;
+	TDelegate<EFbxImportMode> OnImportFbx;
+	TDelegate<> OnPackageGame;
+
 	// 패키징 중이면 true. Build 메뉴 항목을 비활성화하는 데 쓴다.
-	void SetIsPackagingQuery(std::function<bool()> InQuery) { IsPackaging = InQuery; }
+	void SetIsPackagingQuery(std::function<bool()> InQuery) { LevelEditorTab.SetIsPackagingQuery(std::move(InQuery)); }
 
 private:
 	bool bUseDockSpace = true;
@@ -39,13 +43,6 @@ private:
 
 	void DrawMainMenuBar();
 
-	TArray<TUniquePtr<IEditorPanel>> Panels;
-	TUniquePtr<FLevelEditorToolbar> Toolbar;
-
-	std::function<void()> OnNewScene;
-	std::function<void()> OnOpenScene;
-	std::function<void()> OnSaveScene;
-	std::function<void()> OnSaveSceneAs;
-	std::function<void()> OnPackageGame;
-	std::function<bool()> IsPackaging;
+	FLevelEditorTab LevelEditorTab;
+	FEditorTabContainer TabContainer;
 };

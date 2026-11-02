@@ -1,9 +1,27 @@
 #pragma once
 
-#include "Render/StaticMeshData.h"
+#include "Render/Vertex.h"
+#include "Math/Box.h"
 #include "Math/Transform.h"
 
 inline constexpr int32 MaxBoneInfluences = 4;
+
+struct FSkeletalMeshSection
+{
+	uint32 StartIndex = 0;
+	uint32 IndexCount = 0;
+	uint32 MaterialSlotIndex = 0;
+	// GPU Skinning에서 Section별 Bone palette를 사용하면 BoneMap과 MaxBoneInfluences를 추가하고,
+	// Weight의 BoneIndex 변환 및 Binary 저장 형식을 함께 변경해야 한다.
+};
+
+struct FSkeletalMaterialSlot
+{
+	FString Name;
+	FVector4 BaseColor = FVector4(1, 1, 1, 1);
+	FString DiffuseTexturePath;
+	FString NormalTexturePath{};
+};
 
 struct FBoneInfo
 {
@@ -15,6 +33,7 @@ struct FBoneInfo
 
 struct FSkinWeight
 {
+	// 현재 BoneIndex는 전체 Bones 배열의 번호다. Section별 GPU palette 도입 시 해당 Section의 번호로 재매핑한다.
 	uint8 BoneIndex[MaxBoneInfluences] = {};
 	float Weight[MaxBoneInfluences] = {};
 };
@@ -24,8 +43,8 @@ struct FSkeletalMeshData
 	TArray<FVertex> BindVertices;
 	TArray<FSkinWeight> SkinWeight; // BindVertices의 크기와 동일(어떤 정점이 어떤 Bone의 영향을 받는지, 얼마나 영향을 받는지)
 	TArray<uint32> Indices;
-	TArray<FStaticMeshSection> Sections;
-	TArray<FStaticMaterialSlot> MaterialSlots;
+	TArray<FSkeletalMeshSection> Sections;
+	TArray<FSkeletalMaterialSlot> MaterialSlots;
 	TArray<FBoneInfo> Bones;
 	FBox BindAABB;
 	FString SourcePath;
