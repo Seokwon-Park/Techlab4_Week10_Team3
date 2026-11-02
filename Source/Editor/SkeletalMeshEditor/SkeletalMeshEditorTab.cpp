@@ -4,6 +4,7 @@
 #include "Panels/SkeletalMeshViewportPanel.h"
 #include "Panels/SkeletalMeshInfoPanel.h"
 #include "Panels/SkeletalMeshSettingsPanel.h"
+#include "Panels/BoneHierarchyPanel.h"
 
 FSkeletalMeshEditorTab::FSkeletalMeshEditorTab(FSkeletalMeshEditor& InEditor)
 	: FAssetEditorTab(InEditor)
@@ -17,6 +18,7 @@ FSkeletalMeshEditorTab::FSkeletalMeshEditorTab(FSkeletalMeshEditor& InEditor)
 	Panels.Add(MakeUnique<FSkeletalMeshViewportPanel>(InEditor));
 	Panels.Add(MakeUnique<FSkeletalMeshInfoPanel>(InEditor));
 	Panels.Add(MakeUnique<FSkeletalMeshSettingsPanel>(InEditor));
+	Panels.Add(MakeUnique<FBoneHierarchyPanel>(InEditor));
 	for (auto& Panel : Panels)
 	{
 		Panel->SetDockClass(PanelClassId);
@@ -54,12 +56,15 @@ void FSkeletalMeshEditorTab::BuildDefaultLayout(ImGuiID InDockSpaceId, const ImV
 	ImGui::DockBuilderSetNodeSize(InDockSpaceId, Size);
 	ImGuiID ViewportId = InDockSpaceId;
 	ImGuiID RightId = ImGui::DockBuilderSplitNode(ViewportId, ImGuiDir_Right, 0.22f, nullptr, &ViewportId);
-	ImGuiID InfoId = RightId;
-	const ImGuiID SettingsId = ImGui::DockBuilderSplitNode(InfoId, ImGuiDir_Down, 0.75f, nullptr, &InfoId);
+	ImGuiID UpperId = RightId;
+	const ImGuiID SettingsId = ImGui::DockBuilderSplitNode(UpperId, ImGuiDir_Down, 0.25f, nullptr, &UpperId);
+	ImGuiID HierarchyId = UpperId;
+	const ImGuiID InfoId = ImGui::DockBuilderSplitNode(HierarchyId, ImGuiDir_Up, 1.0f / 3.0f, nullptr, &HierarchyId);
 
 	ImGui::DockBuilderDockWindow(Panels[0]->GetWindowName(), ViewportId);
 	ImGui::DockBuilderDockWindow(Panels[1]->GetWindowName(), InfoId);
 	ImGui::DockBuilderDockWindow(Panels[2]->GetWindowName(), SettingsId);
+	ImGui::DockBuilderDockWindow(Panels[3]->GetWindowName(), HierarchyId);
 	ImGui::DockBuilderFinish(InDockSpaceId);
 }
 
