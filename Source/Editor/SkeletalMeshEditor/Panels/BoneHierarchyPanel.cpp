@@ -43,17 +43,26 @@ void FBoneHierarchyPanel::DrawBoneHierarchy(int32 BoneIndex)
 		Flag |= ImGuiTreeNodeFlags_Leaf;
 	}
 
-	const FString& BoneName = BoneItems[BoneIndex].Name;
-	if (ImGui::TreeNodeEx(BoneName.c_str(), Flag))
+	if (Editor.GetSelectedBoneIndex() == BoneIndex)
 	{
-		if (
-			ImGui::IsItemClicked(ImGuiMouseButton_Left) &&
-			!ImGui::IsItemToggledOpen()
-		)
-		{
-			// TODO: 에디터에 Bone 클릭 함수 호출하고 Gizmo 표시하기..
-		}
+		Flag |= ImGuiTreeNodeFlags_Selected;
+	}
 
+	ImGui::PushID(BoneIndex);
+
+	// 표시 이름과 ID를 분리하여 축약된 이름이 겹쳐도 구분되게 함
+	const FString& BoneName = BoneItems[BoneIndex].Name;
+
+	// 접힌 노드도 선택할 수 있도록 펼침 상태와 선택 처리를 분리합니다.
+	const bool bOpen = ImGui::TreeNodeEx("Bone", Flag, "%s", BoneName.c_str());
+
+	if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
+	{
+		Editor.SelectBone(BoneIndex);
+	}
+
+	if (bOpen)
+	{
 		for (int32 ChildIndex : BoneItems[BoneIndex].ChildBoneIndices)
 		{
 			DrawBoneHierarchy(ChildIndex);
@@ -61,4 +70,6 @@ void FBoneHierarchyPanel::DrawBoneHierarchy(int32 BoneIndex)
 
 		ImGui::TreePop();
 	}
+
+	ImGui::PopID();
 }

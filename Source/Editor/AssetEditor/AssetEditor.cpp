@@ -3,6 +3,7 @@
 #include "Editor/AssetEditor/AssetEditorTab.h"
 #include "Editor/EditorUI/EditorUI.h"
 #include "Editor/HitoriEd/EditorEngine.h"
+#include "Runtime/Render/LineBatcher.h"
 
 FAssetEditor::FAssetEditor(
 	UEditorEngine& InEditorEngine,
@@ -105,12 +106,20 @@ void FAssetEditor::Shutdown()
 	bInitialized = false;
 }
 
+void FAssetEditor::OnLineRender(FLineBatcher& LineBatcher)
+{
+}
+
 bool FAssetEditor::InitializeResources()
 {
 	if (!PreviewScene.Initialize(&EditorEngine))
 	{
 		return false;
 	}
+
+	// 새로운 ViewportClient 생성
+	ViewportClient = MakeUnique<FEditorViewportClient>(PreviewScene);
+	ViewportClient->SetViewRotation(FRotator(30.0f, 210.0f, 0.0f));
 
 	// Scene 세팅
 	PreviewScene.Setup();
@@ -125,5 +134,6 @@ TUniquePtr<IEditorTab> FAssetEditor::CreateTab()
 
 void FAssetEditor::ShutdownResources()
 {
+	ViewportClient.reset();
 	PreviewScene.Release();
 }

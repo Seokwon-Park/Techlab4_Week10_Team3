@@ -6,6 +6,7 @@
 #include "Engine/World.h"
 #include "Math/BoxSphereBounds.h"
 #include "Render/SkeletalMesh.h"
+#include "Render/LineBatcher.h"
 
 // Bone의 네임스페이스를 제외한 마지막 콜론 뒤의 이름만 반환
 FString GetBoneDisplayName(const FString& BoneName)
@@ -72,10 +73,6 @@ bool FSkeletalMeshEditor::InitializeResources()
 
 	// BoneItems를 빌드합니다. (에디터 UI에서 본 계층 구조를 표시하기 위해)
 	BuildBoneItems();
-
-	// 새로운 ViewportClient 생성
-	ViewportClient = MakeUnique<FEditorViewportClient>(PreviewScene);
-	ViewportClient->SetViewRotation(FRotator(30.0f, 210.0f, 0.0f));
 
 	// 카메라를 메시에 포커싱
 	FocusMesh();
@@ -193,12 +190,103 @@ void FSkeletalMeshEditor::Render()
 	}
 
 	// EditorEngine에 ViewportClient를 전달하여 렌더링
-	EditorEngine.RenderPreviewViewport(*ViewportClient);
+	EditorEngine.RenderAssetEditor(*this);
+}
+
+void FSkeletalMeshEditor::SelectBone(int32 BoneIndex)
+{
+	if (BoneIndex >= -1 && BoneIndex < BoneItems.Num())
+	{
+		SelectedBoneIndex = BoneIndex;
+	}
+}
+
+bool FSkeletalMeshEditor::GetSelectedBoneLocalTransform(FTransform& OutTransform) const
+{
+	if (!MeshComponent || SelectedBoneIndex < 0 || SelectedBoneIndex >= BoneItems.Num())
+	{
+		return false;
+	}
+
+	OutTransform = MeshComponent->GetBoneLocalTransform(SelectedBoneIndex);
+	return true;
+}
+
+void FSkeletalMeshEditor::SetSelectedBoneLocalTransform(const FTransform& Transform)
+{
+	if (!MeshComponent || SelectedBoneIndex < 0 || SelectedBoneIndex >= BoneItems.Num())
+	{
+		return;
+	}
+
+	// 원본 애셋 대신 프리뷰 컴포넌트의 포즈만 수정합니다. 본 갱신은 다음 World Tick에서 수행합니다.
+	MeshComponent->SetBoneLocalTransform(SelectedBoneIndex, Transform);
+}
+
+void FSkeletalMeshEditor::OnLineRender(FLineBatcher& LineBatcher)
+{
+	if (!Mesh)
+	{
+		return;
+	}
+	
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	const TArray<FBoneInfo>& Bones = Mesh->GetRefSkeleton();
+
+	TArray<FVector> Positions;
+	Positions.SetNum(Bones.Num());
+
+	// 각 Bone의 원점을 월드 공간으로 변환하여 Positions에 저장
+	for (int32 Index = 0; Index < Bones.Num(); ++Index)
+	{
+		const FVector4 Position = FVector4(0.0f, 0.0f, 0.0f, 1.0f) * MeshComponent->GetBoneWorldMatrix(Index);
+		Positions[Index] = FVector(Position.X, Position.Y, Position.Z);
+	}
+
+	// 메시 컴포넌트에서 AABB Bound를 계산하고, 그 크기를 기준으로 Bone 원점과 Bone 연결선을 렌더링합니다.
+	const FBox Bounds = MeshComponent->CalcLocalBounds().GetWorldAABB(MeshComponent->GetWorldMatrix());
+	const float Radius = FMath::Max((Bounds.Max - Bounds.Min).Size() * 0.0025f, 0.001f);
+
+	// Bone 시각화 그리기
+	for (int32 Index = 0; Index < Bones.Num(); ++Index)
+	{
+		const FVector4 Color = Index == SelectedBoneIndex
+			? FVector4(1.0f, 1.0f, 0.0f, 1.0f)
+			: FVector4(0.0f, 0.0f, 0.0f, 1.0f);
+		
+		// Joint 먼저 그리기
+		LineBatcher.AddSphere(Positions[Index], Radius, Color);
+		
+		const int32 ParentIndex = Bones[Index].ParentIndex;
+
+		// 부모가 있다면, 부모에서 자식으로 이어지는 Bone을 그리기
+		if (ParentIndex >= 0 && ParentIndex < Bones.Num())
+		{
+			FVector4 BoneColor(0.0f, 0.0f, 0.0f, 1.0f);
+			if (Index == SelectedBoneIndex)
+			{
+				// 현재 본이 선택한 본이면 부모 본을 노란색으로 표시
+				BoneColor = FVector4(1.0f, 0.5f, 0.0f, 1.0f);
+			}
+			else if (ParentIndex == SelectedBoneIndex)
+			{
+				// 부모 Index가 선택된 본이면 부모 본을 주황색으로 표시
+				BoneColor = FVector4(1.0f, 1.0f, 0.0f, 1.0f);
+			}
+
+			const float Length = (Positions[Index] - Positions[ParentIndex]).Size();
+			const float HalfWidth = FMath::Min(Radius * 1.5f, Length * 0.1f);
+			LineBatcher.AddPyramid(Positions[ParentIndex], Positions[Index], HalfWidth, BoneColor);
+		}
+	}
 }
 
 void FSkeletalMeshEditor::ShutdownResources()
 {
-	ViewportClient.reset();
 	MeshComponent = nullptr;
 	Mesh = nullptr;
 	FAssetEditor::ShutdownResources();
@@ -213,6 +301,8 @@ void FSkeletalMeshEditor::BuildBoneItems()
 
 	const TArray<FBoneInfo>& BoneData = Mesh->GetRefSkeleton();
 	BoneItems.Empty();
+	RootBoneIndices.Empty();
+	SelectedBoneIndex = -1;
 
 	for (int32 BoneIndex = 0; BoneIndex < BoneData.Num(); ++BoneIndex)
 	{

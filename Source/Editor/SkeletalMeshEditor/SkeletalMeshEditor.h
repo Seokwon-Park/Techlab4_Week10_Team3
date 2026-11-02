@@ -36,6 +36,8 @@ public:
 	// 현재 상태를 렌더링합니다.
 	void Render() override;
 
+	// 현재 상태에서 라인을 렌더링합니다. (Gizmo, BoneHierarchy 등)
+	void OnLineRender(class FLineBatcher& LineBatcher) override;
 
 	////////////////////////////////////////////////////////////
 	// 에디터 전용 함수
@@ -43,6 +45,13 @@ public:
 
 	// 카메라를 메시에 포커싱합니다.
 	void FocusMesh();
+
+	// 본을 선택합니다. -1은 선택을 해제합니다.
+	void SelectBone(int32 BoneIndex);
+
+	// 선택한 본의 프리뷰 포즈를 부모 기준 로컬 변환으로 조회·수정합니다.
+	bool GetSelectedBoneLocalTransform(FTransform& OutTransform) const;
+	void SetSelectedBoneLocalTransform(const FTransform& Transform);
 
 	// 뷰포트 상태를 설정합니다. (뷰포트가 보이지 않으면 입력을 무시합니다)
 	void SetViewportState(uint32 Width, uint32 Height, const FViewportCameraInput& Input);
@@ -54,10 +63,10 @@ public:
 
 	const char* GetEditorTypeName() const override { return "SkeletalMesh"; }
 	USkeletalMesh* GetMesh() const { return Mesh; }
-	FEditorViewportClient* GetViewportClient() const { return ViewportClient.get(); }
 
 	const TArray<int32>& GetRootBoneIndices() const { return RootBoneIndices; }
 	const TArray<FEditorBoneItem>& GetBoneItems() const { return BoneItems; }
+	int32 GetSelectedBoneIndex() const { return SelectedBoneIndex; }
 
 protected:
 	// 이 에디터에 연결된 탭을 생성합니다.
@@ -76,7 +85,6 @@ private:
 	class USkeletalMesh* Mesh = nullptr;
 	class USkeletalMeshComponent* MeshComponent = nullptr;
 
-	TUniquePtr<FEditorViewportClient> ViewportClient;
 	FViewportCameraInput CameraInput;
 
 	uint32 ViewportWidth = 0;
@@ -84,6 +92,7 @@ private:
 
 	TArray<FEditorBoneItem> BoneItems;
 	TArray<int32> RootBoneIndices;
+	int32 SelectedBoneIndex = -1;
 
 	bool bViewportVisible = false;
 	bool bInitialFocusPending = true;

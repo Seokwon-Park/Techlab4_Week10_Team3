@@ -4,6 +4,8 @@
 #include "Core/Types.h"
 #include "Editor/AssetEditor/FPreviewScene.h"
 
+class FEditorViewportClient;
+
 class FAssetEditor
 {
 public:
@@ -37,6 +39,7 @@ public:
 	// Editor를 정리합니다.
 	void Shutdown();
 
+	virtual void OnLineRender(class FLineBatcher& LineBatcher);
 
 	////////////////////////////////////////////////////////////
 	// Getter
@@ -45,6 +48,7 @@ public:
 	virtual const char* GetEditorTypeName() const = 0;
 	const FString& GetAssetPath() const { return AssetPath; }
 	FPreviewScene& GetPreviewScene() { return PreviewScene; }
+	FEditorViewportClient* GetViewportClient() const { return ViewportClient.get(); }
 
 	bool IsCloseRequested() const { return bCloseRequested; }
 
@@ -61,6 +65,8 @@ protected:
 	UEditorEngine& EditorEngine;
 	FEditorUI& EditorUI;
 	FPreviewScene PreviewScene;
+
+	TUniquePtr<FEditorViewportClient> ViewportClient;
 
 private:
 	FString AssetPath;

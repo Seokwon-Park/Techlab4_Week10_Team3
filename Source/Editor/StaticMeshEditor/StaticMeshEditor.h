@@ -42,7 +42,6 @@ public:
 
 	const char* GetEditorTypeName() const override { return "StaticMesh"; }
 	UStaticMesh* GetMesh() const { return Mesh; }
-	FEditorViewportClient* GetViewportClient() const { return ViewportClient.get(); }
 
 protected:
 	// 이 에디터에 연결된 탭을 생성합니다.
@@ -58,7 +57,6 @@ private:
 	class UStaticMesh* Mesh = nullptr;
 	class UStaticMeshComponent* MeshComponent = nullptr;
 	
-	TUniquePtr<FEditorViewportClient> ViewportClient;
 	FViewportCameraInput CameraInput;
 	
 	uint32 ViewportWidth = 0;

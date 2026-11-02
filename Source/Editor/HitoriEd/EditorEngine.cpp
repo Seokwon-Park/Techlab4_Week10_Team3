@@ -993,8 +993,9 @@ void UEditorEngine::RenderGameFrame(FGameViewportClient* GameClient, const FScen
 	if (!bRendered) return;
 }
 
-void UEditorEngine::RenderPreviewViewport(FEditorViewportClient& ViewClient)
+void UEditorEngine::RenderAssetEditor(FAssetEditor& AssetEditor)
 {
+	FEditorViewportClient& ViewClient = *AssetEditor.GetViewportClient();
 	UWorld* World = ViewClient.GetWorld();
 
 	// 렌더러가 없음
@@ -1030,7 +1031,18 @@ void UEditorEngine::RenderPreviewViewport(FEditorViewportClient& ViewClient)
 	SceneRenderer.InitViews(Renderer, Options);
 
 	// PreviewViewport 그리기
-	SceneRenderer.Render(Renderer, ViewClient.GetViewTargets(), Options);
+	SceneRenderer.Render(Renderer, ViewClient.GetViewTargets(), Options,
+		[&](FScenePassCallbacks& Callbacks)
+		{
+			// TODO: 지금은 EditorGizmo 슬롯에 들어있지만
+			// 추후 AssetEditor 전용 Gizmo 슬롯을 만들어서 그쪽으로 옮기는 게 좋을 듯
+			Callbacks.Overlays.EditorGizmo = [&]
+			{
+				LineBatcher->BeginFrame();
+				AssetEditor.OnLineRender(*LineBatcher);
+				LineBatcher->OnRender(View.ViewProjectionMatrix);
+			};
+		});
 }
 
 bool UEditorEngine::RenderScene(FSceneViewTargets& Targets, const FSceneView& SceneView,
@@ -1544,6 +1556,7 @@ void UEditorEngine::CreateNewScene()
 		return;
 
 	ResetSceneSelection();
+	LevelEditorTab->OnLevelLoaded.Broadcast(FEditorFileUtils::CurrentScenePath);
 }
 
 // 씬 불러오기가 성공하면 에디터 선택 상태를 초기화한다.

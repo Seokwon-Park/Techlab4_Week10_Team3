@@ -55,10 +55,6 @@ bool FStaticMeshEditor::InitializeResources()
 	// StaticMeshComponent에 메시를 설정
 	MeshComponent->SetStaticMesh(Mesh);
 
-	// 새로운 ViewportClient 생성
-	ViewportClient = MakeUnique<FEditorViewportClient>(PreviewScene);
-	ViewportClient->SetViewRotation(FRotator(30.0f, 210.0f, 0.0f));
-
 	// 카메라를 메시에 포커싱
 	FocusMesh();
 
@@ -175,12 +171,11 @@ void FStaticMeshEditor::Render()
 	}
 
 	// EditorEngine에 ViewportClient를 전달하여 렌더링
-	EditorEngine.RenderPreviewViewport(*ViewportClient);
+	EditorEngine.RenderAssetEditor(*this);
 }
 
 void FStaticMeshEditor::ShutdownResources()
 {
-	ViewportClient.reset();
 	MeshComponent = nullptr;
 	Mesh = nullptr;
 	FAssetEditor::ShutdownResources();
