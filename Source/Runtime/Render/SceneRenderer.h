@@ -7,6 +7,7 @@
 #include "Render/SceneRenderData.h"
 #include "Render/SceneRenderOptions.h"
 #include "Render/RenderGraph/RenderGraph.h"
+#include "Components/DecalComponent.h"
 
 class UWorld;
 class FScene;
@@ -16,6 +17,7 @@ class FTexture2D;
 class FSkyboxRenderer;
 struct FSceneViewTargets;
 struct FLightSceneInfo;
+class UDecalComponent;
 
 // 에디터는 실행할 작업만 제공한다. 패스 생성과 순서는 FSceneRenderer가 결정한다.
 struct FSceneOverlayCallbacks
@@ -121,6 +123,8 @@ private:
 	// 그림자 맵이 생긴 광원에 ShadowMapChannel을 주고(Deferred 0, Forward 겹침 기반 0~3) 광원 데이터를 다시 올린다.
 	// Details 미리보기·캐스케이드 경계 선·stat이 읽는 LightShadows, CascadeShadowDistances도 여기서 채운다.
 	void FinalizeShadowLights(const FSceneRenderOptions& Options);
+
+	static bool CompareDecalSortOrder(const UDecalComponent* A, const UDecalComponent* B) ;
 
 	// 이번 프레임에 그림자를 Projection할 광원. Deferred는 이 순서대로 광원마다 마스크를 만들어 더한다.
 	struct FShadowedLight

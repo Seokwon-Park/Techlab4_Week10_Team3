@@ -631,7 +631,11 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					FDecalData Data{};
 
 					const FScene& Scene = World->GetScene();
-					for (auto Decal : Scene.Decals) {
+
+					TArray <UDecalComponent*> SortedDecals = Scene.Decals;
+					std::sort(SortedDecals.begin(), SortedDecals.end(), CompareDecalSortOrder);
+
+					for (auto Decal : SortedDecals) {
 						if (Decal->GetDecalTexture() == nullptr) continue;
 
 						Decal->SetDecalViewProj();
@@ -1134,4 +1138,9 @@ void FSceneRenderer::PrepareDrawData(FRenderer* Renderer, const FSceneRenderData
 				&Data.ObjectConstants[Index], sizeof(FPerObjectConstants));
 		Renderer->EndObjectConstants();
 	}
+}
+
+
+bool FSceneRenderer::CompareDecalSortOrder(const UDecalComponent* A, const UDecalComponent* B) {
+	return A->GetSortOrder() < B->GetSortOrder();
 }

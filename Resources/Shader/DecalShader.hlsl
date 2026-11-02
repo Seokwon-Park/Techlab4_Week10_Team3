@@ -57,5 +57,5 @@ float4 mainPS(VS_OUT Input) : SV_Target
     
     float4 color = DecalTexture.Sample(DecalSampler, float2(u, v));
     
-    return float4(color.rgb, 1); // 상수버퍼 제대로 넘어갔나 실험용!
+    return color; 
 }
