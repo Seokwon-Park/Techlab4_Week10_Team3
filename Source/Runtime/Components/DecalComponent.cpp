@@ -6,31 +6,34 @@
 
 void UDecalComponent::TickComponent(float DeltaTime)
 {
-	if (CurrentTime > Delay + FadeIn + Visible + FadeOut)
-	{
-		return;
-	}
-	CurrentTime += DeltaTime;
-
 	const float FadeInEnd = Delay + FadeIn;
 	const float VisibleEnd = FadeInEnd + Visible;
 	const float FadeOutEnd = VisibleEnd + FadeOut;
 
+	if (CurrentTime > FadeOutEnd)
+	{
+		return;
+	}
+
+	CurrentTime += DeltaTime;
+
+	float t = 0.0f;
 	if (CurrentTime < Delay) {
-		Fade = 0.0f;
+		t = 0.0f;
 	}
 	else if (CurrentTime < FadeInEnd) {
-		Fade = (CurrentTime - Delay) / FadeIn;
+		t = (CurrentTime - Delay) / FadeIn;
 	}
 	else if (CurrentTime < VisibleEnd) {
-		Fade = 1.0f;
+		t = 1.0f;
 	}
 	else if (CurrentTime < FadeOutEnd) {
-		Fade = 1 - (CurrentTime - VisibleEnd) / FadeOut;
+		t = 1 - (CurrentTime - VisibleEnd) / FadeOut;
 	}
-	else
-		Fade = 0.0f;
-	
+	else {
+		t = 0.0f;
+	}
+	Fade = Ease(t);
 }
 
 void UDecalComponent::SetDecalViewProj()
@@ -57,4 +60,9 @@ void UDecalComponent::DestroyRenderState()
 {
 	GetWorld()->GetScene().RemoveDecal(this);
 	Super::DestroyRenderState();
+}
+
+float UDecalComponent::Ease(float t) const
+{
+	return FMath::CubicInterp(0.0f, 0.0f, 1.0f, 0.0f, t);
 }

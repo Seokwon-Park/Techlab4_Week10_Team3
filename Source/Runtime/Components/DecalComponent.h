@@ -34,6 +34,10 @@ protected:
 	virtual void DestroyRenderState() override;
 
 private:
+	float Ease(float t) const;
+
+
+private:
 	UPROPERTY(EditAnywhere) UTexture2D* DecalTexture = nullptr;
 	UPROPERTY(EditAnywhere) FVector Extent = FVector(50, 50, 50);
 	UPROPERTY(EditAnywhere) int32 SortOrder = 0;
@@ -41,9 +45,9 @@ private:
 	FMatrix DecalViewProj;
 
 	float Fade = 0.0f;
-	float Delay = 1.0f;
-	float FadeIn = 1.0f;
-	float Visible = 1.0f;
-	float FadeOut = 1.0f;
+	UPROPERTY(EditAnywhere) float Delay = 1.0f;
+	UPROPERTY(EditAnywhere) float FadeIn = 1.0f;
+	UPROPERTY(EditAnywhere) float Visible = 1.0f;
+	UPROPERTY(EditAnywhere) float FadeOut = 1.0f;
 	float CurrentTime = 0.0f;
 };
