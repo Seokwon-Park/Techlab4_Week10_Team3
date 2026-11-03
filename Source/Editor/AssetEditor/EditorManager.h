@@ -16,8 +16,8 @@ public:
 	// 에디터 전체의 Tick을 수행합니다.
 	void Tick(float DeltaTime);
 
-	// 에디터 전체의 렌더링을 수행합니다.
-	void Render();
+	// 애셋 에디터의 프리뷰 장면을 렌더링합니다.
+	void RenderPreview();
 
 	// 지연된 요청을 처리합니다. UI 렌더링이 종료된 이후에 실행합니다.
 	void LateTick();
@@ -34,7 +34,8 @@ public:
 	IEditorTab* GetMainSelectedTab() const { return TabContainer.GetMainSelectedTab(); }
 	IEditorTab* GetFocusedTab() const { return TabContainer.GetFocusedTab(); }
 
-	void OnRender();
+	// 에디터 탭과 패널 UI를 그립니다.
+	void DrawEditorUI();
 
 	FLevelEditorTab& GetLevelEditorTab() { return *LevelEditorTab; }
 

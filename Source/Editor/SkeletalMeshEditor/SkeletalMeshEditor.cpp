@@ -153,7 +153,7 @@ void FSkeletalMeshEditor::Tick(float DeltaTime)
 	FAssetEditor::Tick(DeltaTime);
 }
 
-void FSkeletalMeshEditor::Render()
+void FSkeletalMeshEditor::OnRenderPreview()
 {
 	// Viewport가 보이지 않으면 렌더링하지 않음
 	const bool bRender = bViewportVisible;
@@ -223,7 +223,7 @@ void FSkeletalMeshEditor::SetSelectedBoneLocalTransform(const FTransform& Transf
 	MeshComponent->SetBoneLocalTransform(SelectedBoneIndex, Transform);
 }
 
-void FSkeletalMeshEditor::OnLineRender(FLineBatcher& LineBatcher)
+void FSkeletalMeshEditor::OnRenderLine(FLineBatcher& LineBatcher)
 {
 	if (!Mesh)
 	{

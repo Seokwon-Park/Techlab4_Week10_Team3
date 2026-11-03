@@ -150,13 +150,13 @@ void FEditorManager::Tick(float DeltaTime)
 	}
 }
 
-void FEditorManager::Render()
+void FEditorManager::RenderPreview()
 {
 	for (auto& Editor : Editors)
 	{
 		if (!Editor->IsCloseRequested())
 		{
-			Editor->Render();
+			Editor->OnRenderPreview();
 		}
 	}
 }
@@ -204,7 +204,7 @@ void FEditorManager::Shutdown()
 	LevelEditorTab.reset();
 }
 
-void FEditorManager::OnRender()
+void FEditorManager::DrawEditorUI()
 {
 	TabContainer.OnRender();
 }

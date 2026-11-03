@@ -368,7 +368,7 @@ void UEditorEngine::Tick(const float DeltaTime)
 		AudioDevice->Update(!bIsPaused);
 	}
 	RenderViewports();
-	EditorManager->Render();
+	EditorManager->RenderPreview();
 	EndFrame();
 	EditorManager->LateTick();
 }
@@ -1035,7 +1035,7 @@ void UEditorEngine::RenderAssetEditor(FAssetEditor& AssetEditor)
 			Callbacks.Overlays.EditorGizmo = [&]
 			{
 				LineBatcher->BeginFrame();
-				AssetEditor.OnLineRender(*LineBatcher);
+				AssetEditor.OnRenderLine(*LineBatcher);
 				LineBatcher->OnRender(View.ViewProjectionMatrix);
 			};
 		});
@@ -1289,7 +1289,7 @@ void UEditorEngine::PresentFrame()
 
 		ImGuiRenderer->Begin();
 
-		EditorManager->OnRender();
+		EditorManager->DrawEditorUI();
 
 		ImGuiRenderer->End();
 	}

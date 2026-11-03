@@ -34,10 +34,10 @@ public:
 	void Tick(float DeltaTime) override;
 
 	// 현재 상태를 렌더링합니다.
-	void Render() override;
+	void OnRenderPreview() override;
 
 	// 현재 상태에서 라인을 렌더링합니다. (Gizmo, BoneHierarchy 등)
-	void OnLineRender(class FLineBatcher& LineBatcher) override;
+	void OnRenderLine(class FLineBatcher& LineBatcher) override;
 
 	////////////////////////////////////////////////////////////
 	// 에디터 전용 함수

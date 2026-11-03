@@ -28,7 +28,7 @@ public:
 	virtual void Tick(float DeltaTime);
 	
 	// 현재 상태를 렌더링합니다.
-	virtual void Render();
+	virtual void OnRenderPreview();
 
 	// Editor를 포커싱합니다.
 	void Activate();
@@ -39,7 +39,7 @@ public:
 	// Editor를 정리합니다.
 	void Shutdown();
 
-	virtual void OnLineRender(class FLineBatcher& LineBatcher);
+	virtual void OnRenderLine(class FLineBatcher& LineBatcher);
 
 	////////////////////////////////////////////////////////////
 	// Getter

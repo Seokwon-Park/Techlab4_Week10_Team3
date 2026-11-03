@@ -134,7 +134,7 @@ void FStaticMeshEditor::Tick(float DeltaTime)
 	FAssetEditor::Tick(DeltaTime);
 }
 
-void FStaticMeshEditor::Render()
+void FStaticMeshEditor::OnRenderPreview()
 {
 	// Viewport가 보이지 않으면 렌더링하지 않음
 	const bool bRender = bViewportVisible;

@@ -22,7 +22,7 @@ public:
 	void Tick(float DeltaTime) override;
 	
 	// 현재 상태를 렌더링합니다.
-	void Render() override;
+	void OnRenderPreview() override;
 	
 
 	////////////////////////////////////////////////////////////

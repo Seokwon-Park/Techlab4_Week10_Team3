@@ -61,7 +61,7 @@ void FAssetEditor::Tick(float DeltaTime)
 	PreviewScene.Tick(DeltaTime);
 }
 
-void FAssetEditor::Render()
+void FAssetEditor::OnRenderPreview()
 {
 	// 프리뷰 장면과 뷰포트 렌더링은 후속 단계에서 연결한다.
 }
@@ -106,7 +106,7 @@ void FAssetEditor::Shutdown()
 	bInitialized = false;
 }
 
-void FAssetEditor::OnLineRender(FLineBatcher& LineBatcher)
+void FAssetEditor::OnRenderLine(FLineBatcher& LineBatcher)
 {
 }
 
