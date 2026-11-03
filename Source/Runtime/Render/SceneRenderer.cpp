@@ -70,6 +70,10 @@ namespace
 	bool CompareDecalItemRef(const FDecalItemRef& A, const FDecalItemRef& B) {
 		return std::less <const FPrimitiveSceneProxy*>()(A.Proxy, B.Proxy);
 	}
+
+	bool CompareDecalItemRefProxy(const FDecalItemRef& Ref, const FPrimitiveSceneProxy* Proxy) {
+		return std::less <const FPrimitiveSceneProxy*>()(Ref.Proxy, Proxy);
+	}
 }
 
 bool FSceneRenderer::SetCascadeCount(uint32 Count)
@@ -649,8 +653,6 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					DecalBatches.Reserve(ForwardBatches.Num());
 					FDecalData Data{};
 
-					TSet <const FPrimitiveSceneProxy*> DecalReceivers;
-
 					const FScene& Scene = World->GetScene();
 					RenderData.RenderStats.DecalCount = Scene.Decals.Num();
 
@@ -708,10 +710,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 								const FMeshDrawBatch::FItem& Item = ForwardBatches[Ref.Batch].Items[Ref.Item];
 								RenderData.RenderStats.DecalItemsTested++;
 
-								if (bDecalBVHCulling) {
-									if (Item.Proxy && !DecalReceivers.Contains(Item.Proxy)) return;
-								}
-								else if (bDecalCulling) {
+								if (!bDecalBVHCulling && bDecalCulling) {
 									RenderData.RenderStats.DecalBroadTests++;
 									if (!IntersectAABB(DecalAABB, Item.Bounds)) return;
 								}
@@ -728,17 +727,24 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 						{
 							SCOPE_CYCLE_COUNTER(STAT_DecalGatherItems);
 							if (bDecalBVHCulling) {
-								DecalReceivers.Reset();
 								Scene.BVH.Query(
 									[&](const FBox& Bounds) {
 										RenderData.RenderStats.DecalBroadTests++;
 										return UWorld::AreAABBsOverlapping(DecalBox, Bounds);
 									},
-									[&](FPrimitiveSceneProxy* Proxy) { DecalReceivers.Add(Proxy); });
+									[&](FPrimitiveSceneProxy* Proxy) { 
+										// BVH에서 얻은 Proxy를 ItemRefs에서 찾아서 ConsiderItem 호출
+										auto it = std::lower_bound(ItemRefs.begin(), ItemRefs.end(), Proxy, CompareDecalItemRefProxy);
+										while (it != ItemRefs.end() && it->Proxy == Proxy) {
+											ConsiderItem(*it);
+											++it;
+										}
+									});
 							}
-
-							for (const FDecalItemRef& Ref : ItemRefs) {
-								ConsiderItem(Ref);
+							else {
+								for (const FDecalItemRef& Ref : ItemRefs) {
+									ConsiderItem(Ref);
+								}
 							}
 						}
 
