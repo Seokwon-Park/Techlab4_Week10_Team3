@@ -41,6 +41,13 @@ FFrustumCorners GenerateFrustumCorners(const FMatrix& InvViewProjection);
 bool IsAABBInFrustum(const FAABB& Bounds, const FFrustumPlanes& Frustum);
 FAABB MakeWorldBounds(const FBox& Value);
 
+inline bool IntersectAABB(const FAABB& A, const FAABB& B) {
+	if (std::abs(A.Center.X - B.Center.X) > A.Extent.X + B.Extent.X) return false;
+	if (std::abs(A.Center.Y - B.Center.Y) > A.Extent.Y + B.Extent.Y) return false;
+	if (std::abs(A.Center.Z - B.Center.Z) > A.Extent.Z + B.Extent.Z) return false;
+	return true;
+}
+
 enum class EFrustumTest : uint8 { Outside, Intersect, Inside };
 
 // 6개 평면 모두 검사해야 하는 초기 마스크. 비트 i가 켜져 있으면 평면 i를 아직 검사해야 한다.

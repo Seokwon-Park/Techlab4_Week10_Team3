@@ -50,6 +50,13 @@ void UDecalComponent::SetDecalViewProj()
 	DecalViewProj = View * Proj;
 }
 
+FAABB UDecalComponent::GetWorldAABB() const
+{
+	const FVector Scale = GetWorldScale3D();
+	const FBox Local { -Extent / Scale, Extent / Scale };
+	return MakeWorldBounds(Local.GetWorldAABB(GetWorldMatrix()));
+}
+
 void UDecalComponent::CreateRenderState()
 {
 	Super::CreateRenderState();

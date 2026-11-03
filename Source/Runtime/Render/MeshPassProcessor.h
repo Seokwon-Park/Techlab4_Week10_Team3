@@ -36,6 +36,7 @@ struct FMeshDrawBatch
 		const void* ObjectKey = nullptr;
 		bool bOccludedByGpu = false;
 		bool bReceivesDecals = true;
+		FAABB Bounds{};
 	};
 
 	FPipelineState Pipeline;

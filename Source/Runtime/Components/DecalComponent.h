@@ -2,6 +2,7 @@
 
 #include "SceneComponent.h"
 #include "Render/Texture2D.h"
+#include "Math/Frustum.h"
 #include "DecalComponent.generated.h"
 
 UCLASS()
@@ -24,6 +25,8 @@ public:
 	FMatrix GetDecalVP() { return DecalViewProj; }
 
 	float GetFade() const { return Fade; }
+
+	FAABB GetWorldAABB() const;
 
 protected:
 	virtual bool ShouldCreateRenderState() const override
@@ -51,4 +54,5 @@ private:
 	UPROPERTY(EditAnywhere) float Visible = 1.0f;
 	UPROPERTY(EditAnywhere) float FadeOut = 1.0f;
 	float CurrentTime = 0.0f;
+
 };
