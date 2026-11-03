@@ -23,4 +23,5 @@ private:
 	TArray<TUniquePtr<FStaticMeshEditorPanel>> Panels;
 	ImGuiID DockSpaceId = 0;
 	ImGuiID PanelClassId = 0;
+	bool bLayoutInitialized = false;
 };

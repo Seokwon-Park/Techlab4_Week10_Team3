@@ -223,6 +223,32 @@ void FSkeletalMeshEditor::SetSelectedBoneLocalTransform(const FTransform& Transf
 	MeshComponent->SetBoneLocalTransform(SelectedBoneIndex, Transform);
 }
 
+void FSkeletalMeshEditor::ResetPose()
+{
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	MeshComponent->ResetPose();
+}
+
+void FSkeletalMeshEditor::ResetBone(int32 BoneIndex)
+{
+	if (!Mesh)
+	{
+		return;
+	}
+
+	if (!MeshComponent)
+	{
+		return;
+	}
+
+	FTransform Transform = Mesh->GetRefSkeleton()[BoneIndex].LocalBindPose;
+	MeshComponent->SetBoneLocalTransform(BoneIndex, Transform);
+}
+
 void FSkeletalMeshEditor::OnRenderLine(FLineBatcher& LineBatcher)
 {
 	if (!Mesh)

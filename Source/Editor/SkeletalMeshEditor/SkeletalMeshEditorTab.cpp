@@ -3,6 +3,7 @@
 #include "SkeletalMeshEditor.h"
 #include "Panels/SkeletalMeshViewportPanel.h"
 #include "Panels/SkeletalMeshInfoPanel.h"
+#include "Panels/SkeletalMeshDetailsPanel.h"
 #include "Panels/SkeletalMeshSettingsPanel.h"
 #include "Panels/BoneHierarchyPanel.h"
 
@@ -17,8 +18,9 @@ FSkeletalMeshEditorTab::FSkeletalMeshEditorTab(FSkeletalMeshEditor& InEditor)
 
 	Panels.Add(MakeUnique<FSkeletalMeshViewportPanel>(InEditor));
 	Panels.Add(MakeUnique<FSkeletalMeshInfoPanel>(InEditor));
-	Panels.Add(MakeUnique<FSkeletalMeshSettingsPanel>(InEditor));
 	Panels.Add(MakeUnique<FBoneHierarchyPanel>(InEditor));
+	Panels.Add(MakeUnique<FSkeletalMeshDetailsPanel>(InEditor));
+	Panels.Add(MakeUnique<FSkeletalMeshSettingsPanel>(InEditor));
 	for (auto& Panel : Panels)
 	{
 		Panel->SetDockClass(PanelClassId);
@@ -56,15 +58,18 @@ void FSkeletalMeshEditorTab::BuildDefaultLayout(ImGuiID InDockSpaceId, const ImV
 	ImGui::DockBuilderSetNodeSize(InDockSpaceId, Size);
 	ImGuiID ViewportId = InDockSpaceId;
 	ImGuiID RightId = ImGui::DockBuilderSplitNode(ViewportId, ImGuiDir_Right, 0.22f, nullptr, &ViewportId);
-	ImGuiID UpperId = RightId;
-	const ImGuiID SettingsId = ImGui::DockBuilderSplitNode(UpperId, ImGuiDir_Down, 0.25f, nullptr, &UpperId);
-	ImGuiID HierarchyId = UpperId;
-	const ImGuiID InfoId = ImGui::DockBuilderSplitNode(HierarchyId, ImGuiDir_Up, 1.0f / 3.0f, nullptr, &HierarchyId);
+	// 오른쪽 패널을 위에서부터 Info 20%, Hierarchy 30%, Details 30%, Settings 20%로 배치합니다.
+	ImGuiID RemainingId = RightId;
+	const ImGuiID InfoId = ImGui::DockBuilderSplitNode(RemainingId, ImGuiDir_Up, 0.20f, nullptr, &RemainingId);
+	const ImGuiID HierarchyId = ImGui::DockBuilderSplitNode(RemainingId, ImGuiDir_Up, 3.0f / 8.0f, nullptr, &RemainingId);
+	ImGuiID DetailsId = RemainingId;
+	const ImGuiID SettingsId = ImGui::DockBuilderSplitNode(DetailsId, ImGuiDir_Down, 0.40f, nullptr, &DetailsId);
 
 	ImGui::DockBuilderDockWindow(Panels[0]->GetWindowName(), ViewportId);
 	ImGui::DockBuilderDockWindow(Panels[1]->GetWindowName(), InfoId);
-	ImGui::DockBuilderDockWindow(Panels[2]->GetWindowName(), SettingsId);
-	ImGui::DockBuilderDockWindow(Panels[3]->GetWindowName(), HierarchyId);
+	ImGui::DockBuilderDockWindow(Panels[2]->GetWindowName(), HierarchyId);
+	ImGui::DockBuilderDockWindow(Panels[3]->GetWindowName(), DetailsId);
+	ImGui::DockBuilderDockWindow(Panels[4]->GetWindowName(), SettingsId);
 	ImGui::DockBuilderFinish(InDockSpaceId);
 }
 
@@ -79,9 +84,13 @@ void FSkeletalMeshEditorTab::OnRender(bool bActive)
 	if (ImGui::GetIO().ConfigFlags & ImGuiConfigFlags_DockingEnable)
 	{
 		const ImVec2 Size = ImGui::GetContentRegionAvail();
-		if (bActive && Size.x > 0.0f && Size.y > 0.0f && !ImGui::DockBuilderGetNode(DockSpaceId))
+		if (bActive && Size.x > 0.0f && Size.y > 0.0f &&
+			(!bLayoutInitialized || !ImGui::DockBuilderGetNode(DockSpaceId)))
 		{
+			// 탭을 새로 열면 저장된 배치를 제거하고 기본 레이아웃으로 시작합니다.
+			ImGui::DockBuilderRemoveNode(DockSpaceId);
 			BuildDefaultLayout(DockSpaceId, Size);
+			bLayoutInitialized = true;
 		}
 
 		ImGuiWindowClass WindowClass;

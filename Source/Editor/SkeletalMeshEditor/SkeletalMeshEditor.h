@@ -53,6 +53,12 @@ public:
 	bool GetSelectedBoneLocalTransform(FTransform& OutTransform) const;
 	void SetSelectedBoneLocalTransform(const FTransform& Transform);
 
+	// 스켈레톤의 상태를 초기화합니다.
+	void ResetPose();
+
+	// 본의 상태를 초기화합니다.
+	void ResetBone(int32 BoneIndex);
+
 	// 뷰포트 상태를 설정합니다. (뷰포트가 보이지 않으면 입력을 무시합니다)
 	void SetViewportState(uint32 Width, uint32 Height, const FViewportCameraInput& Input);
 

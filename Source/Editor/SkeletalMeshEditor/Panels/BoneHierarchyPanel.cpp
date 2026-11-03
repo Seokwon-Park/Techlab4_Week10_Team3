@@ -53,7 +53,7 @@ void FBoneHierarchyPanel::DrawBoneHierarchy(int32 BoneIndex)
 	// 표시 이름과 ID를 분리하여 축약된 이름이 겹쳐도 구분되게 함
 	const FString& BoneName = BoneItems[BoneIndex].Name;
 
-	// 접힌 노드도 선택할 수 있도록 펼침 상태와 선택 처리를 분리합니다.
+	// 접힌 노드도 선택할 수 있도록 펼침 상태와 선택 처리를 분리
 	const bool bOpen = ImGui::TreeNodeEx("Bone", Flag, "%s", BoneName.c_str());
 
 	if (ImGui::IsItemClicked(ImGuiMouseButton_Left) && !ImGui::IsItemToggledOpen())
