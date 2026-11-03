@@ -661,6 +661,8 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					DecalHeaders.Reserve(ForwardBatches.Num());
 					TArray <FDecalItemRef> ItemRefs;
 
+					TArray <uint32> TouchedBatches;
+
 					// ForwardBatches를 순회로 각 배치의 아이템 중 데칼을 받을 수 있는 아이템들 수집
 					for (uint32 BatchIndex = 0; BatchIndex < ForwardBatches.Num(); BatchIndex++)
 					{
@@ -693,12 +695,36 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 						RenderCommand::BindConstantBuffer(1, Constants, EShaderBindFlagBits::Pixel);
 
 						DecalBatches.Reset();
+						TouchedBatches.Reset();
 						uint32 ReceiverItems = 0;
 						const FAABB DecalAABB = Decal->GetWorldAABB();
 						const FOBB DecalOBB = Decal->GetWorldOBB();
-						
+
 						const FBox DecalBox{ DecalAABB.Center - DecalAABB.Extent, DecalAABB.Center + DecalAABB.Extent };
-						
+
+						// 아이템 하나 검사 
+						const auto ConsiderItem = [&](const FDecalItemRef& Ref)
+							{
+								const FMeshDrawBatch::FItem& Item = ForwardBatches[Ref.Batch].Items[Ref.Item];
+								RenderData.RenderStats.DecalItemsTested++;
+
+								if (bDecalBVHCulling) {
+									if (Item.Proxy && !DecalReceivers.Contains(Item.Proxy)) return;
+								}
+								else if (bDecalCulling) {
+									RenderData.RenderStats.DecalBroadTests++;
+									if (!IntersectAABB(DecalAABB, Item.Bounds)) return;
+								}
+
+								RenderData.RenderStats.DecalNarrowTested++;
+								if (bDecalNarrowCulling && !IntersectOBBAABB(DecalOBB, Item.Bounds)) return;
+
+								FMeshDrawBatch& Header = DecalHeaders[Ref.Batch];
+								if (Header.Items.IsEmpty()) TouchedBatches.Add(Ref.Batch);
+								Header.Items.Add(Item);
+							};
+
+						// BVH 질의 후 index 하나씩 돌며 검사
 						{
 							SCOPE_CYCLE_COUNTER(STAT_DecalGatherItems);
 							if (bDecalBVHCulling) {
@@ -711,38 +737,19 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 									[&](FPrimitiveSceneProxy* Proxy) { DecalReceivers.Add(Proxy); });
 							}
 
-							{
-								for (uint32 BatchIndex = 0; BatchIndex < ForwardBatches.Num(); BatchIndex++) {
-									const FMeshDrawBatch& Src = ForwardBatches[BatchIndex];
-									FMeshDrawBatch Batch = DecalHeaders[BatchIndex];
-
-									for (const FMeshDrawBatch::FItem& Item : Src.Items) {
-										if (!Item.bReceivesDecals) continue;
-										RenderData.RenderStats.DecalItemsTested++;
-
-										if (bDecalBVHCulling) {
-											if (Item.Proxy && !DecalReceivers.Contains(Item.Proxy)) continue;
-										}
-										else if (bDecalCulling) {
-											RenderData.RenderStats.DecalBroadTests++;
-											if (!IntersectAABB(DecalAABB, Item.Bounds)) continue;
-										}
-
-										RenderData.RenderStats.DecalNarrowTested++;
-										if (bDecalNarrowCulling && !IntersectOBBAABB(DecalOBB, Item.Bounds)) continue;
-
-										Batch.Items.Push(Item);
-
-									}
-
-									if (Batch.Items.IsEmpty()) continue;
-
-									Batch.Textures = { { Decal->GetDecalTexture(), EShaderBindFlagBits::Pixel } };
-									ReceiverItems += Batch.Items.Num();
-									DecalBatches.Push(std::move(Batch));
-
-								}
+							for (const FDecalItemRef& Ref : ItemRefs) {
+								ConsiderItem(Ref);
 							}
+						}
+
+						if (TouchedBatches.IsEmpty()) continue;
+						std::sort(TouchedBatches.begin(), TouchedBatches.end());
+
+						for (uint32 BatchIndex : TouchedBatches) {
+							FMeshDrawBatch& Header = DecalHeaders[BatchIndex];
+							Header.Textures = { { Decal->GetDecalTexture(), EShaderBindFlagBits::Pixel } };
+							ReceiverItems += Header.Items.Num();
+							DecalBatches.Add(std::move(Header));
 						}
 
 						{
@@ -750,6 +757,12 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 							Renderer->DrawMeshes(DecalBatches);
 						}
 						RenderData.RenderStats.DecalDrawCalls += ReceiverItems;
+
+						for (uint32 Index = 0; Index < static_cast<uint32>(TouchedBatches.Num()); ++Index) {
+							FMeshDrawBatch& Header = DecalHeaders[TouchedBatches[Index]];
+							Header = std::move(DecalBatches[Index]);
+							Header.Items.Reset();
+						}
 						
 					}
 				})) return false;
