@@ -476,6 +476,7 @@ const FRenderStats& Stats = RenderData.RenderStats;
 		Lines.Add({ std::format("  Decal Draw Calls {}", Stats.DecalDrawCalls), ValueColor });
 		Lines.Add({ std::format("  Decal Items Tested {}", Stats.DecalItemsTested), ValueColor });
 		Lines.Add({ std::format("  Decal Items Culled {}", Stats.DecalItemsTested - Stats.DecalDrawCalls), ValueColor });
+		Lines.Add({ std::format("  Decal Broad Tested {}", Stats.DecalBroadTests), ValueColor });
 		Lines.Add({ std::format("  Decal Narrow Tested {}", Stats.DecalNarrowTested), ValueColor });
 	}
 

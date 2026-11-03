@@ -624,7 +624,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			Decal.ReadTextures = {};
 			Decal.Viewport = {};
 			if (!Graph.AddRasterPass(std::move(Decal), [this, Renderer, bDecalCulling = Options.bDecalCulling, 
-				bDecalNarrowCulling = Options.bDecalNarrowCulling]
+				bDecalNarrowCulling = Options.bDecalNarrowCulling, bDecalBVHCulling = Options.bDecalBVHCulling]
 				{
 					SCOPE_CYCLE_COUNTER(STAT_DecalPass);
 					if (!bCorePassSucceeded || ForwardBatches.IsEmpty()) return;
@@ -636,6 +636,8 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					TArray<FMeshDrawBatch> DecalBatches;
 					DecalBatches.Reserve(ForwardBatches.Num());
 					FDecalData Data{};
+
+					TSet <const FPrimitiveSceneProxy*> DecalReceivers;
 
 					const FScene& Scene = World->GetScene();
 					RenderData.RenderStats.DecalCount = Scene.Decals.Num();
@@ -658,6 +660,18 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 						uint32 ReceiverItems = 0;
 						const FAABB DecalAABB = Decal->GetWorldAABB();
 						const FOBB DecalOBB = Decal->GetWorldOBB();
+						
+						const FBox DecalBox{ DecalAABB.Center - DecalAABB.Extent, DecalAABB.Center + DecalAABB.Extent };
+						
+						if (bDecalBVHCulling) {
+							DecalReceivers.Reset();
+							Scene.BVH.Query(
+								[&](const FBox& Bounds) { 
+									RenderData.RenderStats.DecalBroadTests++;
+									return UWorld::AreAABBsOverlapping(DecalBox, Bounds); 
+								},
+								[&](FPrimitiveSceneProxy* Proxy) { DecalReceivers.Add(Proxy); });
+						}
 
 						for (const FMeshDrawBatch& Src : ForwardBatches) {
 							FMeshDrawBatch Batch = Src;
@@ -666,7 +680,15 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 							for (const FMeshDrawBatch::FItem& Item : Src.Items) {
 								if (!Item.bReceivesDecals) continue;
 								RenderData.RenderStats.DecalItemsTested++;
-								if (bDecalCulling && !IntersectAABB(DecalAABB, Item.Bounds)) continue;
+
+								if (bDecalBVHCulling) {
+									if (Item.Proxy && !DecalReceivers.Contains(Item.Proxy)) continue;
+								}
+								else if (bDecalCulling) {
+									RenderData.RenderStats.DecalBroadTests++;
+									if (!IntersectAABB(DecalAABB, Item.Bounds)) continue;
+								}
+								
 								RenderData.RenderStats.DecalNarrowTested++;
 								if (bDecalNarrowCulling && !IntersectOBBAABB(DecalOBB, Item.Bounds)) continue;
 								

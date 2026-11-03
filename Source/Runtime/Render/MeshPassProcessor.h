@@ -37,6 +37,7 @@ struct FMeshDrawBatch
 		bool bOccludedByGpu = false;
 		bool bReceivesDecals = true;
 		FAABB Bounds{};
+		const FPrimitiveSceneProxy* Proxy = nullptr;
 	};
 
 	FPipelineState Pipeline;
