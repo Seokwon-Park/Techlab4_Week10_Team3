@@ -1,5 +1,6 @@
 #include "EnginePCH.h"
 #include "Editor/Settings/SettingsPanel.h"
+#include "Asset/AssetManager.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 
@@ -531,6 +532,22 @@ void FSettingsPanel::DrawDefaultPawnSettings()
                 }
                 if (bSelected) ImGui::SetItemDefaultFocus();
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", Mesh->GetPath().c_str());
+                ImGui::PopID();
+            }
+
+            // 아직 로드되지 않은 메시는 경로만 보여 주고 고를 때 로드한다
+            for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::StaticMesh))
+            {
+                ImGui::PushID(ItemPath.c_str());
+                if (ImGui::Selectable(fs::path(ItemPath).stem().string().c_str(), false))
+                {
+                    if (UStaticMesh* Mesh = UAssetManager::GetAssetByPath<UStaticMesh>(ItemPath))
+                    {
+                        SelectedMesh = Mesh;
+                        bChanged = true;
+                    }
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ItemPath.c_str());
                 ImGui::PopID();
             }
             ImGui::EndCombo();

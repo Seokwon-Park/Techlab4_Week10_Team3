@@ -12,7 +12,10 @@
 
 enum class EAssetType
 {
-
+	None,
+	Texture,
+	Font,
+	StaticMesh
 };
 
 class UStaticMesh;
@@ -47,17 +50,26 @@ public:
 	void CreateParticleMaterial();
 	void CreateEditorArrowMaterial();
 
+	// 경로는 "Assets/Models/a.obj"와 "Models/a.obj"를 같은 에셋으로 본다.
+	// 아직 로드되지 않았으면 여기서 로드하므로 GPU 자원을 만들 수 있는 메인 스레드에서만 부른다.
 	template <typename T>
 	static T* GetAssetByPath(const FString& Path)
 	{
-		URenderAsset** Found = Get().AssetMap.Find(Path);
+		URenderAsset* Asset = Get().FindOrLoadAsset(Path);
 
-		if (Found == nullptr || *Found == nullptr || !(*Found)->IsA<T>())
+		if (Asset == nullptr || !Asset->IsA<T>())
 		{
 			return nullptr;
 		}
-		return Cast<T>(*Found);
+		return Cast<T>(Asset);
 	}
+
+	// 로드를 일으키지 않고 이미 로드된 에셋만 찾는다
+	static URenderAsset* FindLoadedAsset(const FString& Path);
+
+	// 스캔으로 등록됐지만 아직 로드되지 않은 에셋의 타입. 그 외에는 None
+	static EAssetType GetUnloadedAssetType(const FString& Path);
+	static TArray<FString> GetUnloadedAssetPaths(EAssetType Type);
 
 	void RegisterAsset(const FString& Key, URenderAsset* Asset);
 
@@ -76,12 +88,15 @@ public:
 	// LOD는 LOD0에서 만들어지므로 LOD를 만들기 전에만 부를 수 있다. Rotate는 회전(길이·손잡이 보존)이어야 한다.
 	static bool ReorientStaticMesh(UStaticMesh& Mesh, const std::function<FVector(const FVector&)>& Rotate);
 
-	// 로드된 OBJ 스태틱 메시(키가 .obj로 끝나는 것)마다 부른다. 기본 도형·기즈모 메시는 제외된다.
+	// OBJ 스태틱 메시(키가 .obj로 끝나는 것)마다 부른다. 아직 로드되지 않은 메시는 먼저 로드한다. 기본 도형·기즈모 메시는 제외된다.
 	static void ForEachObjStaticMesh(const std::function<void(const FString& Key, UStaticMesh& Mesh)>& Func);
 	static bool BuildMaterialsFromSlots(const TArray<FStaticMaterialSlot>& Slots, TArray<UMaterial*>& OutMaterials);
 	static bool BuildMaterialsFromSlots(const TArray<FSkeletalMaterialSlot>& Slots, TArray<UMaterial*>& OutMaterials);
 
 private:
+	URenderAsset* FindOrLoadAsset(const FString& Path);
+
+	// 키는 Assets 기준 상대 경로. 로드 가능한 파일의 키 -> 실제 파일 경로
 	TMap<FString, FString> AssetPathMap;
 	TMap<FString, URenderAsset*> AssetMap;
 	TMap<FString, USoundWave*> SoundMap;
