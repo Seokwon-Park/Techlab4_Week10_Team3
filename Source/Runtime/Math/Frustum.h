@@ -71,9 +71,20 @@ inline bool IntersectOBBAABB(const FOBB& A, const FAABB& B) {
 	const FVector WorldAxis[3] = { FVector(1, 0, 0), FVector(0, 1, 0), FVector(0, 0, 1) };
 
 	// OBB vs AABB 분리축 테스트!
+
+	// 면 법선 6축 검사
 	for (int32 i = 0; i < 3; ++i) {
 		if (IsSeparated(A.Axis[i], A, B)) return false;
 		if (IsSeparated(WorldAxis[i], A, B)) return false;
+	}
+
+	// 모서리 외적 9축 검사
+	for (int32 i = 0; i < 3; i++) {
+		for (int32 j = 0; j < 3; j++) {
+			const FVector L = A.Axis[i] ^ WorldAxis[j];	// ^ : 외적
+			if (L.SizeSquared() < 1e-6f) continue;	// 평행하면 분리 못찾음
+			if (IsSeparated(L, A, B)) return false;
+		}
 	}
 
 	return true;

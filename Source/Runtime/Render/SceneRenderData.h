@@ -41,6 +41,7 @@ struct FRenderStats
 	uint32 DecalsRendered = 0;
 	uint32 DecalDrawCalls = 0;
 	uint32 DecalItemsTested = 0;
+	uint32 DecalNarrowTested = 0;
 
 	uint32 CascadeViewsRedrawn = 0;
 	uint32 CascadeViewsCached = 0;

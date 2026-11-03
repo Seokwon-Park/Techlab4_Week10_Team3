@@ -623,7 +623,8 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			Decal.DepthAttachment = { Depth, ERenderGraphLoadAction::Load, 1.0f, 0 };
 			Decal.ReadTextures = {};
 			Decal.Viewport = {};
-			if (!Graph.AddRasterPass(std::move(Decal), [this, Renderer, bDecalCulling = Options.bDecalCulling]
+			if (!Graph.AddRasterPass(std::move(Decal), [this, Renderer, bDecalCulling = Options.bDecalCulling, 
+				bDecalNarrowCulling = Options.bDecalNarrowCulling]
 				{
 					SCOPE_CYCLE_COUNTER(STAT_DecalPass);
 					if (!bCorePassSucceeded || ForwardBatches.IsEmpty()) return;
@@ -656,6 +657,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 						DecalBatches.Reset();
 						uint32 ReceiverItems = 0;
 						const FAABB DecalAABB = Decal->GetWorldAABB();
+						const FOBB DecalOBB = Decal->GetWorldOBB();
 
 						for (const FMeshDrawBatch& Src : ForwardBatches) {
 							FMeshDrawBatch Batch = Src;
@@ -665,7 +667,11 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 								if (!Item.bReceivesDecals) continue;
 								RenderData.RenderStats.DecalItemsTested++;
 								if (bDecalCulling && !IntersectAABB(DecalAABB, Item.Bounds)) continue;
+								RenderData.RenderStats.DecalNarrowTested++;
+								if (bDecalNarrowCulling && !IntersectOBBAABB(DecalOBB, Item.Bounds)) continue;
+								
 								Batch.Items.Push(Item);
+								
 							}
 
 							if (Batch.Items.IsEmpty()) continue;
