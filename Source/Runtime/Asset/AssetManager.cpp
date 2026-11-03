@@ -19,6 +19,7 @@
 #include "Engine/Classes/Sound/SoundWave.h"
 
 #include "Render/ImageLoader.h"
+#include "Asset/AssetLoadProfiler.h"
 #include <cctype>
 
 
@@ -33,12 +34,48 @@ namespace
 		return Extension;
 	}
 
+	EAssetType GetAssetTypeFromPath(const FString& Path) {
+		const FString Extension{ GetAssetExtension(Path) };
+		if (Extension == ".png" || Extension == ".dds") {
+			return EAssetType::Texture;
+		}
+		if (Extension == ".json") {
+			return EAssetType::Font;
+		}
+		if (Extension == ".obj") {
+			return EAssetType::StaticMesh;
+		}
+		if (Extension == ".bin" && FFbxMeshBake::IsBakedPath(Path)) {
+			// 파일을 읽지 않고 구분하도록 FFbxImporter의 저장 이름 규칙을 쓴다
+			return Path.ends_with("_Static.fbx.bin") ? EAssetType::StaticMesh : EAssetType::SkeletalMesh;
+		}
+		return EAssetType::None;
+	}
+
+	// 저장된 씬에 "Assets/..."와 "Models/..."가 섞여 있어 둘 다 같은 키로 바꾼다. 내장 에셋 이름은 그대로 남는다.
+	FString MakeLookupKey(const FString& Path)
+	{
+		FString Key = Path;
+		std::replace(Key.begin(), Key.end(), '\\', '/');
+		if (Key.starts_with("./"))
+		{
+			Key.erase(0, 2);
+		}
+		if (Key.starts_with("Assets/"))
+		{
+			Key.erase(0, 7);
+		}
+		return Key;
+	}
+
 	UStaticMesh* CreateStaticMesh(const FStaticMeshData* MeshData)
 	{
 		if (!MeshData || !MeshData->Vertices.Num() || !MeshData->Indices.Num())
 			return nullptr;
 
+		FLoadStageTimer CopyTimer{ "Mesh/CopyData" };
 		FStaticMeshData Optimized = *MeshData;
+		CopyTimer.Stop();
 
 		// Mesh에 MaterialSlot 없을 경우 Default Material 할당
 		if (Optimized.MaterialSlots.IsEmpty())
@@ -59,11 +96,19 @@ namespace
 			Optimized.Sections.Add(DefaultSection);
 		}
 
-		Optimized.BuildTangentSpace();
-		Optimized.OptimizeTriangleOrderForVertexCache();
+		{
+			FLoadStageTimer Timer{ "Mesh/BuildTangentSpace" };
+			Optimized.BuildTangentSpace();
+		}
+		{
+			FLoadStageTimer Timer{ "Mesh/OptimizeTriangleOrder" };
+			Optimized.OptimizeTriangleOrderForVertexCache();
+		}
 
+		FLoadStageTimer BufferTimer{ "Mesh/CreateGPUBuffers" };
 		TUniquePtr<FVertexBuffer> VB = RenderCommand::CreateStaticVertexBuffer(Optimized.Vertices.GetData(), sizeof(FVertex) * static_cast<uint32>(Optimized.Vertices.size()), sizeof(FVertex));
 		TUniquePtr<FIndexBuffer> IB = RenderCommand::CreateStaticIndexBuffer(Optimized.Indices.GetData(), static_cast<uint32>(Optimized.Indices.size()));
+		BufferTimer.Stop();
 		if (VB == nullptr || IB == nullptr) return nullptr;
 
 		UStaticMesh* Mesh = NewObject<UStaticMesh>();
@@ -74,13 +119,21 @@ namespace
 		Mesh->IndexBuffer = std::move(IB);
 
 		// 빈 슬롯이면 위에서 Default 슬롯을 넣었으므로 원본(MeshData)이 아니라 Mesh->MeshData를 쓴다
+		FLoadStageTimer MaterialTimer{ "Mesh/BuildMaterials (includes texture loads)" };
 		if (!UAssetManager::BuildMaterialsFromSlots(Mesh->MeshData.MaterialSlots, Mesh->Materials))
 		{
 			return nullptr;
 		}
+		MaterialTimer.Stop();
 
-		Mesh->MeshData.BuildTriangleBVH();
-		Mesh->RebuildRenderData();
+		{
+			FLoadStageTimer Timer{ "Mesh/BuildTriangleBVH" };
+			Mesh->MeshData.BuildTriangleBVH();
+		}
+		{
+			FLoadStageTimer Timer{ "Mesh/RebuildRenderData" };
+			Mesh->RebuildRenderData();
+		}
 
 		return Mesh;
 	}
@@ -99,11 +152,18 @@ UAssetManager& UAssetManager::Get()
 
 void UAssetManager::Init(const FAssetLoadProgress& OnProgress)
 {
-	FGeometryGenerator::CreateDefaultMeshDatas();
-	// 머티리얼이 참조하므로 반드시 먼저 만든다
-	Get().CreateDefaultTextures();
-	Get().CreateDefaultMaterial();
-	Get().ScanAssets("Assets", OnProgress);
+	{
+		FLoadStageTimer Timer{ "Init/Defaults before scan" };
+		FGeometryGenerator::CreateDefaultMeshDatas();
+		// 머티리얼이 참조하므로 반드시 먼저 만든다
+		Get().CreateDefaultTextures();
+		Get().CreateDefaultMaterial();
+	}
+	{
+		FLoadStageTimer Timer{ "Init/ScanAssets" };
+		Get().ScanAssets("Assets", OnProgress);
+	}
+	FLoadStageTimer DefaultsTimer{ "Init/Defaults after scan" };
 	Get().CreateDefaultMeshes();
 	Get().CreateBillboardMaterial();
 	Get().CreateParticleMaterial();
@@ -118,6 +178,7 @@ void UAssetManager::ScanAssets(const fs::path& AssetRoot, const FAssetLoadProgre
 		return;
 	}
 
+	FLoadStageTimer EnumerateTimer{ "Scan/EnumerateFiles" };
 	TArray<fs::path> Files;
 	for (const fs::directory_entry& Entry : fs::recursive_directory_iterator(AssetRoot))
 	{
@@ -126,45 +187,118 @@ void UAssetManager::ScanAssets(const fs::path& AssetRoot, const FAssetLoadProgre
 			Files.Add(Entry.path());
 		}
 	}
+	EnumerateTimer.Stop();
 
 	const int32 Total = Files.Num();
 	for (int32 i = 0; i < Total; ++i)
 	{
 		FString Key = fs::relative(Files[i], AssetRoot).generic_string();
 		FString Path = Files[i].generic_string();
-		AssetPathMap.Add(Key, Path);
-		LoadAsset(Key, Path);
+
+		// 경로만 등록한다. 실제 로드는 처음 찾을 때 FindOrLoadAsset에서 한다.
+		if (GetAssetTypeFromPath(Path) != EAssetType::None)
+		{
+			AssetPathMap.Add(Key, Path);
+		}
 
 		if (OnProgress)
 		{
+			FLoadStageTimer Timer{ "Scan/OnProgress (splash)" };
 			OnProgress(i + 1, Total, Key);
 		}
 	}
 }
 
 void UAssetManager::LoadAsset(const FString& Key, const FString& Path) {
-	const FString Extension{ GetAssetExtension(Path) };
-	if (Extension == ".png" || Extension == ".dds") {
-		if (UTexture2D* Texture{ LoadTexture(Path) }) {
-			AssetMap[Key] = Texture;
-		}
-	}
-	if (Extension == ".json") {
-		const FString TexturePath{ fs::path{ Path }.replace_extension(".png").string() };
-		if (UFont* Font{ LoadFontAtlas(Path, TexturePath) }) {
-			AssetMap[Key] = Font;
-		}
-	}
-	if (Extension == ".obj") {
-		LoadObjStaticMesh(Path);
-	}
-	// FBX Asset은 엔진 시작 시 원본 .fbx 대신 Import로 저장한 .fbx.bin만 로드한다.
+	// FBX Asset은 원본 .fbx 대신 Import로 저장한 .fbx.bin만 로드한다.
 	// 원본 해석과 변경 여부 비교는 FFbxImporter::ImportToAssets에서만 수행하며,
 	// 이 로드 경로는 원본 파일이나 FBX SDK 없이 저장된 데이터로 렌더 자원을 만든다.
-	if (Extension == ".bin" && FFbxMeshBake::IsBakedPath(Path)) {
+	if (FFbxMeshBake::IsBakedPath(Path)) {
 		FString Error;
 		if (!LoadFbxMesh(Path, Error)) HTR_LOG(Error, "{}", Error);
+		return;
 	}
+
+	switch (GetAssetTypeFromPath(Path)) {
+	case EAssetType::Texture:
+		LoadTexture(Path);
+		break;
+	case EAssetType::Font:
+		LoadFontAtlas(Path, fs::path{ Path }.replace_extension(".png").string());
+		break;
+	case EAssetType::StaticMesh:
+		LoadObjStaticMesh(Path);
+		break;
+	default:
+		break;
+	}
+}
+
+URenderAsset* UAssetManager::FindOrLoadAsset(const FString& Path)
+{
+	// 렌더링 중에도 불리는 내장 에셋("DefaultMaterial" 등)은 키를 만들지 않고 바로 찾는다
+	if (URenderAsset** Found = AssetMap.Find(Path))
+	{
+		return *Found;
+	}
+
+	const FString Key = MakeLookupKey(Path);
+	if (URenderAsset** Found = AssetMap.Find(Key))
+	{
+		return *Found;
+	}
+
+	const FString* FoundSource = AssetPathMap.Find(Key);
+	if (FoundSource == nullptr)
+	{
+		return nullptr;
+	}
+	const FString SourcePath = *FoundSource;
+
+	const uint64 LoadStart = FPlatformTime::GetCycles64();
+	LoadAsset(Key, SourcePath);
+	const double LoadMs = FPlatformTime::ToMilliseconds64(FPlatformTime::GetCycles64() - LoadStart);
+	FAssetLoadProfiler::AddFile(SourcePath, LoadMs);
+	FAssetLoadProfiler::AddStage("Lazy/LoadAsset " + GetAssetExtension(SourcePath), LoadMs);
+
+	URenderAsset** Loaded = AssetMap.Find(Key);
+	if (Loaded == nullptr)
+	{
+		// 찾을 때마다 파일을 다시 읽지 않도록 등록을 지운다
+		HTR_LOG(Warning, "Asset load failed: {}", SourcePath);
+		AssetPathMap.Remove(Key);
+		return nullptr;
+	}
+	return *Loaded;
+}
+
+URenderAsset* UAssetManager::FindLoadedAsset(const FString& Path)
+{
+	URenderAsset** Found = Get().AssetMap.Find(MakeLookupKey(Path));
+	return Found ? *Found : nullptr;
+}
+
+EAssetType UAssetManager::GetUnloadedAssetType(const FString& Path)
+{
+	const FString Key = MakeLookupKey(Path);
+	if (Get().AssetMap.Contains(Key) || !Get().AssetPathMap.Contains(Key))
+	{
+		return EAssetType::None;
+	}
+	return GetAssetTypeFromPath(Key);
+}
+
+TArray<FString> UAssetManager::GetUnloadedAssetPaths(EAssetType Type)
+{
+	TArray<FString> Paths;
+	for (const auto& [Key, Path] : Get().AssetPathMap)
+	{
+		if (GetAssetTypeFromPath(Key) == Type && !Get().AssetMap.Contains(Key))
+		{
+			Paths.Add(Path);
+		}
+	}
+	return Paths;
 }
 
 void UAssetManager::CreateDefaultTextures() {
@@ -326,16 +460,19 @@ void UAssetManager::Shutdown()
 
 void UAssetManager::RegisterAsset(const FString& Key, URenderAsset* Asset)
 {
+	// 경로 표기는 씬 저장 형식이 바뀌지 않도록 받은 그대로 둔다
 	Asset->SetPath(Key);
-	AssetMap[Key] = Asset;
+	AssetMap[MakeLookupKey(Key)] = Asset;
 }
 
 UTexture2D* UAssetManager::LoadTexture(const FString& InPath, bool GenerateMips) {
-	if (URenderAsset** Found{ AssetMap.Find(InPath) }) {
+	if (URenderAsset** Found{ AssetMap.Find(MakeLookupKey(InPath)) }) {
 		return Cast<UTexture2D>(*Found);
 	}
 
+	FLoadStageTimer DecodeTimer{ "Texture/Decode" };
 	const FImageData Data = ImageLoader::LoadAuto(InPath);
+	DecodeTimer.Stop();
 	if (!Data.IsValid())
 	{
 		return nullptr;
@@ -354,7 +491,9 @@ UTexture2D* UAssetManager::LoadTexture(const FString& InPath, bool GenerateMips)
 		(bGenerateGPUmips ? ETextureBindFlags::RenderTarget : ETextureBindFlags::None);
 	Desc.bGenerateMips = bGenerateGPUmips;
 
+	FLoadStageTimer CreateTimer{ "Texture/CreateTexture2D" };
 	TUniquePtr<FTexture2D> Resource = RenderCommand::CreateTexture2D(Desc, Data);
+	CreateTimer.Stop();
 
 	if (!Resource || !Resource->GetSRV()) {
 		return nullptr;
@@ -403,12 +542,15 @@ USoundWave* UAssetManager::LoadSound(const FString& Path)
 UStaticMesh* UAssetManager::LoadObjStaticMesh(const FString& Path)
 {
 	const FString Key = MakeAssetKey(Path);
-	if (UStaticMesh* Cached = GetAssetByPath<UStaticMesh>(Key))
+	// GetAssetByPath는 여기로 다시 들어오므로 쓰지 않는다
+	if (URenderAsset* Cached = FindLoadedAsset(Key))
 	{
-		return Cached;
+		return Cast<UStaticMesh>(Cached);
 	}
 
+	FLoadStageTimer ReadTimer{ "Mesh/ReadBakedOrCook" };
 	TUniquePtr<FStaticMeshData> Data = FObjImporter::LoadStaticMeshData(Path);
+	ReadTimer.Stop();
 	UStaticMesh* Mesh = CreateStaticMesh(Data.get());   // Data가 nullptr이면 nullptr 반환
 	if (!Mesh)
 	{
@@ -423,7 +565,8 @@ URenderAsset* UAssetManager::LoadFbxMesh(const FString& Path, FString& OutError)
 {
 	OutError.clear();
 	const FString Key = MakeAssetKey(Path);
-	if (auto* Cached = GetAssetByPath<URenderAsset>(Key)) return Cached;
+	// GetAssetByPath는 여기로 다시 들어오므로 쓰지 않는다
+	if (URenderAsset* Cached = FindLoadedAsset(Key)) return Cached;
 	FFbxBakedMesh Data;
 	if (!FFbxMeshBake::IsBakedPath(Path) || !FFbxMeshBake::Read(Path, Data, OutError))
 	{
@@ -473,6 +616,14 @@ bool UAssetManager::ReorientStaticMesh(UStaticMesh& Mesh, const std::function<FV
 
 void UAssetManager::ForEachObjStaticMesh(const std::function<void(const FString& Key, UStaticMesh& Mesh)>& Func)
 {
+	for (const FString& Path : GetUnloadedAssetPaths(EAssetType::StaticMesh))
+	{
+		if (!FFbxMeshBake::IsBakedPath(Path))
+		{
+			GetAssetByPath<UStaticMesh>(Path);
+		}
+	}
+
 	for (auto& [Key, Asset] : Get().AssetMap)
 	{
 		if (!Asset || !Asset->IsA<UStaticMesh>() || !fs::path(Key).extension().string().ends_with(".obj"))

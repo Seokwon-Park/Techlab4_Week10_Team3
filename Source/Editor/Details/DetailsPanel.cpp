@@ -335,6 +335,27 @@ namespace
 				if (bSelected)
 					ImGui::SetItemDefaultFocus();
 			}
+
+			// 아직 로드되지 않은 폰트는 경로만 보여 주고 고를 때 로드한다
+			for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::Font))
+			{
+				ImGui::PushID(ItemPath.c_str());
+				if (ImGui::Selectable(GetAssetDisplayName(ItemPath).c_str(), false))
+				{
+					if (UFont* Font = UAssetManager::GetAssetByPath<UFont>(ItemPath))
+					{
+						if (UTextRenderComponent* TextComponent = Cast<UTextRenderComponent>(Owner))
+							TextComponent->SetFont(Font);
+						else
+							*FontPtr = Font;
+					}
+				}
+				if (ImGui::IsItemHovered())
+				{
+					ImGui::SetTooltip("%s", ItemPath.c_str());
+				}
+				ImGui::PopID();
+			}
 			ImGui::EndCombo();
 		}
 	}
@@ -358,6 +379,21 @@ namespace
 			if (ImGui::Selectable(GetAssetDisplayName(Path).c_str(), bSelected)) Component->SetSkeletalMesh(*Itr);
 			if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", Path.c_str());
 			if (bSelected) ImGui::SetItemDefaultFocus();
+			ImGui::PopID();
+		}
+
+		// 아직 로드되지 않은 메시는 경로만 보여 주고 고를 때 로드한다
+		for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::SkeletalMesh))
+		{
+			ImGui::PushID(ItemPath.c_str());
+			if (ImGui::Selectable(GetAssetDisplayName(ItemPath).c_str(), false))
+			{
+				if (USkeletalMesh* Mesh = UAssetManager::GetAssetByPath<USkeletalMesh>(ItemPath))
+				{
+					Component->SetSkeletalMesh(Mesh);
+				}
+			}
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ItemPath.c_str());
 			ImGui::PopID();
 		}
 		ImGui::EndCombo();
@@ -405,6 +441,27 @@ namespace
 				ImGui::PopID();
 				if (bSelected)
 					ImGui::SetItemDefaultFocus();
+			}
+
+			// 아직 로드되지 않은 메시는 경로만 보여 주고 고를 때 로드한다
+			for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::StaticMesh))
+			{
+				ImGui::PushID(ItemPath.c_str());
+				if (ImGui::Selectable(GetAssetDisplayName(ItemPath).c_str(), false))
+				{
+					if (UStaticMesh* Mesh = UAssetManager::GetAssetByPath<UStaticMesh>(ItemPath))
+					{
+						if (UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(Owner))
+							MeshComponent->SetStaticMesh(Mesh);
+						else
+							*StaticMeshPtr = Mesh;
+					}
+				}
+				if (ImGui::IsItemHovered())
+				{
+					ImGui::SetTooltip("%s", ItemPath.c_str());
+				}
+				ImGui::PopID();
 			}
 			ImGui::EndCombo();
 		}
@@ -507,6 +564,22 @@ namespace
 				}
 				if (Selected) {
 					ImGui::SetItemDefaultFocus();
+				}
+				ImGui::PopID();
+			}
+
+			// 아직 로드되지 않은 텍스처는 썸네일 없이 경로만 보여 주고 고를 때 로드한다
+			for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::Texture)) {
+				ImGui::PushID(ItemPath.c_str());
+				ImGui::Dummy({ ItemThumbnailSize, ItemThumbnailSize });
+				ImGui::SameLine();
+				if (ImGui::Selectable(GetAssetDisplayName(ItemPath).c_str(), false, ImGuiSelectableFlags_None, { 0.0f, ItemThumbnailSize })) {
+					if (UTexture2D* ItemTexture{ UAssetManager::GetAssetByPath<UTexture2D>(ItemPath) }) {
+						SetMaterialTexture(MeshComponent, MaterialSlot, TextureSlot, ItemTexture, Effective, Override);
+					}
+				}
+				if (ImGui::IsItemHovered()) {
+					ImGui::SetTooltip("%s", ItemPath.c_str());
 				}
 				ImGui::PopID();
 			}

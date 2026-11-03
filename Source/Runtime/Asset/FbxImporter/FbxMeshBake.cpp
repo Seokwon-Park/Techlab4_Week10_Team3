@@ -8,7 +8,7 @@
 namespace
 {
 	constexpr uint32 Magic = 0x58424648; // HFBX, little endian
-	constexpr uint32 Version = 2;
+	constexpr uint32 Version = 3;
 	static_assert(sizeof(FVertex) == 64 && sizeof(FSkinWeight) == 20);
 	// 기존 Binary의 Section 배열을 그대로 읽도록 두 타입의 바이트 배치를 고정한다.
 	static_assert(std::is_trivially_copyable_v<FSkeletalMeshSection> && std::is_standard_layout_v<FSkeletalMeshSection>);
