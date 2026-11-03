@@ -31,11 +31,19 @@
 DECLARE_CYCLE_STAT("Frustum Cull", STAT_FrustumCull);
 DECLARE_CYCLE_STAT("Gather Elements", STAT_GatherElements);
 DECLARE_CYCLE_STAT("Decal Pass", STAT_DecalPass);
+DECLARE_CYCLE_STAT("Decal Gather Items", STAT_DecalGatherItems);
+DECLARE_CYCLE_STAT("Decal Draw", STAT_DecalDraw);
 
 namespace
 {
 	std::atomic<uint32> GCascadeCount{ 4 };
 	std::atomic<float> GCascadeLogRatio{ 0.8f };
+
+	struct FDecalItemRef {
+		const FPrimitiveSceneProxy* Proxy;
+		uint32 Batch;
+		uint32 Item;
+	};
 
 	FRenderGraphRasterPassDesc MakeViewportPass(const std::string& Name, FRenderGraphTextureRef Color,
 		FRenderGraphTextureRef DepthTarget = {},
@@ -57,6 +65,10 @@ namespace
 		ERenderGraphLoadAction DepthLoad = ERenderGraphLoadAction::Load)
 	{
 		return !Draw || Graph.AddRasterPass(MakeViewportPass(Name, Color, Depth, DepthLoad), Draw);
+	}
+
+	bool CompareDecalItemRef(const FDecalItemRef& A, const FDecalItemRef& B) {
+		return std::less <const FPrimitiveSceneProxy*>()(A.Proxy, B.Proxy);
 	}
 }
 
@@ -645,6 +657,30 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					TArray <UDecalComponent*> SortedDecals = Scene.Decals;
 					std::sort(SortedDecals.begin(), SortedDecals.end(), CompareDecalSortOrder);
 
+					TArray <FMeshDrawBatch> DecalHeaders;
+					DecalHeaders.Reserve(ForwardBatches.Num());
+					TArray <FDecalItemRef> ItemRefs;
+
+					// ForwardBatches를 순회로 각 배치의 아이템 중 데칼을 받을 수 있는 아이템들 수집
+					for (uint32 BatchIndex = 0; BatchIndex < ForwardBatches.Num(); BatchIndex++)
+					{
+						const FMeshDrawBatch& Src = ForwardBatches[BatchIndex];
+						DecalHeaders.Add(Src);
+						FMeshDrawBatch& Header = DecalHeaders.Last();
+						Header.Items.Reset();
+						Header.Pipeline = *DecalPipeline;
+						Header.Sampler = ESamplerState::LinearClamp;
+
+						for (uint32 ItemIndex = 0; ItemIndex < static_cast<uint32>(Src.Items.Num()); ItemIndex++)
+						{
+							const FMeshDrawBatch::FItem& Item = Src.Items[ItemIndex];
+							if (!Item.bReceivesDecals) continue;
+							ItemRefs.Add({ Item.Proxy, BatchIndex, ItemIndex });
+						}
+					}
+
+					std::sort(ItemRefs.begin(), ItemRefs.end(), CompareDecalItemRef);
+
 					for (auto Decal : SortedDecals) {
 						if (Decal->GetDecalTexture() == nullptr) continue;
 						RenderData.RenderStats.DecalsRendered++;
@@ -663,51 +699,58 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 						
 						const FBox DecalBox{ DecalAABB.Center - DecalAABB.Extent, DecalAABB.Center + DecalAABB.Extent };
 						
-						if (bDecalBVHCulling) {
-							DecalReceivers.Reset();
-							Scene.BVH.Query(
-								[&](const FBox& Bounds) { 
-									RenderData.RenderStats.DecalBroadTests++;
-									return UWorld::AreAABBsOverlapping(DecalBox, Bounds); 
-								},
-								[&](FPrimitiveSceneProxy* Proxy) { DecalReceivers.Add(Proxy); });
-						}
-
-						for (const FMeshDrawBatch& Src : ForwardBatches) {
-							FMeshDrawBatch Batch = Src;
-							Batch.Items.Reset();
-
-							for (const FMeshDrawBatch::FItem& Item : Src.Items) {
-								if (!Item.bReceivesDecals) continue;
-								RenderData.RenderStats.DecalItemsTested++;
-
-								if (bDecalBVHCulling) {
-									if (Item.Proxy && !DecalReceivers.Contains(Item.Proxy)) continue;
-								}
-								else if (bDecalCulling) {
-									RenderData.RenderStats.DecalBroadTests++;
-									if (!IntersectAABB(DecalAABB, Item.Bounds)) continue;
-								}
-								
-								RenderData.RenderStats.DecalNarrowTested++;
-								if (bDecalNarrowCulling && !IntersectOBBAABB(DecalOBB, Item.Bounds)) continue;
-								
-								Batch.Items.Push(Item);
-								
+						{
+							SCOPE_CYCLE_COUNTER(STAT_DecalGatherItems);
+							if (bDecalBVHCulling) {
+								DecalReceivers.Reset();
+								Scene.BVH.Query(
+									[&](const FBox& Bounds) {
+										RenderData.RenderStats.DecalBroadTests++;
+										return UWorld::AreAABBsOverlapping(DecalBox, Bounds);
+									},
+									[&](FPrimitiveSceneProxy* Proxy) { DecalReceivers.Add(Proxy); });
 							}
 
-							if (Batch.Items.IsEmpty()) continue;
+							{
+								for (uint32 BatchIndex = 0; BatchIndex < ForwardBatches.Num(); BatchIndex++) {
+									const FMeshDrawBatch& Src = ForwardBatches[BatchIndex];
+									FMeshDrawBatch Batch = DecalHeaders[BatchIndex];
 
-							Batch.Pipeline = *DecalPipeline;
-							Batch.Sampler = ESamplerState::LinearClamp;
-							Batch.Textures = { { Decal->GetDecalTexture(), EShaderBindFlagBits::Pixel } };
-							ReceiverItems += Batch.Items.Num();
-							DecalBatches.Push(std::move(Batch));
+									for (const FMeshDrawBatch::FItem& Item : Src.Items) {
+										if (!Item.bReceivesDecals) continue;
+										RenderData.RenderStats.DecalItemsTested++;
 
+										if (bDecalBVHCulling) {
+											if (Item.Proxy && !DecalReceivers.Contains(Item.Proxy)) continue;
+										}
+										else if (bDecalCulling) {
+											RenderData.RenderStats.DecalBroadTests++;
+											if (!IntersectAABB(DecalAABB, Item.Bounds)) continue;
+										}
+
+										RenderData.RenderStats.DecalNarrowTested++;
+										if (bDecalNarrowCulling && !IntersectOBBAABB(DecalOBB, Item.Bounds)) continue;
+
+										Batch.Items.Push(Item);
+
+									}
+
+									if (Batch.Items.IsEmpty()) continue;
+
+									Batch.Textures = { { Decal->GetDecalTexture(), EShaderBindFlagBits::Pixel } };
+									ReceiverItems += Batch.Items.Num();
+									DecalBatches.Push(std::move(Batch));
+
+								}
+							}
 						}
 
-						Renderer->DrawMeshes(DecalBatches);
+						{
+							SCOPE_CYCLE_COUNTER(STAT_DecalDraw);
+							Renderer->DrawMeshes(DecalBatches);
+						}
 						RenderData.RenderStats.DecalDrawCalls += ReceiverItems;
+						
 					}
 				})) return false;
 		}
