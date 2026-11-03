@@ -946,6 +946,7 @@ void UEditorEngine::BuildSceneRenderOptions(FEditorViewportClient* ViewClient, b
 	Options.bShowLightCulling = !IsPIE && ViewClient->IsLightCulling();
 	Options.SceneDepthRange = ViewClient->GetMaxRange();
 	Options.bDrawDecals = S.bDrawDecals;
+	Options.bDecalCulling = S.bDecalCulling;
 }
 
 // 게임 뷰포트 화면을 렌더링한다

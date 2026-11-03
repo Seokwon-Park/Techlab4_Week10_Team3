@@ -27,6 +27,7 @@ struct FEditorSettings
 	bool bDrawPSGrid = false;
 	bool bEnableFXAA = false;
 	bool bDrawDecals = true;
+	bool bDecalCulling = true;
 	ELightCullingMode LightCullingMode = ELightCullingMode::Tiled;
 	ERenderingPath RenderingPath = ERenderingPath::Deferred;
 	ELightingModel LightingModel = ELightingModel::Gouraud;

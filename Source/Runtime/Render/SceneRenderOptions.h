@@ -18,6 +18,7 @@ struct FSceneRenderOptions
 	bool bShowWorldNormal = false;
 	bool bShowLightCulling = false;
 	bool bDrawDecals = true;
+	bool bDecalCulling = true;
 	float SceneDepthRange = 1.0f;
 	uint32 DirectionalShadowMapSize = 0;
 	uint32 PointShadowMapSize = 0;

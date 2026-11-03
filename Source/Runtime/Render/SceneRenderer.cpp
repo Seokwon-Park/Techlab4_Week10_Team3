@@ -623,7 +623,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			Decal.DepthAttachment = { Depth, ERenderGraphLoadAction::Load, 1.0f, 0 };
 			Decal.ReadTextures = {};
 			Decal.Viewport = {};
-			if (!Graph.AddRasterPass(std::move(Decal), [this, Renderer]
+			if (!Graph.AddRasterPass(std::move(Decal), [this, Renderer, bDecalCulling = Options.bDecalCulling]
 				{
 					SCOPE_CYCLE_COUNTER(STAT_DecalPass);
 					if (!bCorePassSucceeded || ForwardBatches.IsEmpty()) return;
@@ -664,9 +664,8 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 							for (const FMeshDrawBatch::FItem& Item : Src.Items) {
 								if (!Item.bReceivesDecals) continue;
 								RenderData.RenderStats.DecalItemsTested++;
-								if(IntersectAABB(DecalAABB, Item.Bounds)) {
-									Batch.Items.Push(Item);
-								}
+								if (bDecalCulling && !IntersectAABB(DecalAABB, Item.Bounds)) continue;
+								Batch.Items.Push(Item);
 							}
 
 							if (Batch.Items.IsEmpty()) continue;
