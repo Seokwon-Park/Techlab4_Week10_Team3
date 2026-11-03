@@ -46,7 +46,12 @@ void UDecalComponent::SetDecalViewProj()
 	Up=  Up.Normalized();
 
 	FMatrix View = LookAt(this->GetWorldLocation(), this->GetWorldLocation() + Forward, Up);
-	FMatrix Proj = Ortho(Extent.Y * 2, Extent.Y / Extent.Z, -Extent.X, Extent.X);
+	FMatrix Proj;
+	
+	if (bPerspective)
+		Proj = Perspective(FovDegrees, Extent.Y / Extent.Z, 0.1f, Extent.X * 2);
+	else
+		Proj = Ortho(Extent.Y * 2, Extent.Y / Extent.Z, -Extent.X, Extent.X);
 	DecalViewProj = View * Proj;
 }
 

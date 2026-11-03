@@ -47,10 +47,11 @@
                                 },
                                 "FadeIn": 1.0,
                                 "FadeOut": 1.0,
+                                "FovDegrees": 60.0,
                                 "SortOrder": 2,
                                 "Transform": {
                                     "Location": {
-                                        "X": 0.0,
+                                        "X": -1.671754240989685,
                                         "Y": 0.0,
                                         "Z": -0.0003504753112792969
                                     },
@@ -68,6 +69,7 @@
                                 "Visible": 1.0,
                                 "bAutoActivate": true,
                                 "bHiddenInGame": false,
+                                "bPerspective": false,
                                 "bVisible": true
                             }
                         },
@@ -254,10 +256,11 @@
                                 },
                                 "FadeIn": 1.0,
                                 "FadeOut": 1.0,
+                                "FovDegrees": 60.0,
                                 "SortOrder": 1,
                                 "Transform": {
                                     "Location": {
-                                        "X": -0.31070804595947266,
+                                        "X": -1.4351938962936401,
                                         "Y": -0.1683095097541809,
                                         "Z": 0.0
                                     },
@@ -275,6 +278,7 @@
                                 "Visible": 1.0,
                                 "bAutoActivate": true,
                                 "bHiddenInGame": false,
+                                "bPerspective": false,
                                 "bVisible": true
                             }
                         },
@@ -390,10 +394,11 @@
                                 },
                                 "FadeIn": 1.0,
                                 "FadeOut": 1.0,
+                                "FovDegrees": 60.0,
                                 "SortOrder": 3,
                                 "Transform": {
                                     "Location": {
-                                        "X": 0.0,
+                                        "X": -1.8422926664352417,
                                         "Y": 0.20470869541168213,
                                         "Z": 0.0
                                     },
@@ -411,6 +416,7 @@
                                 "Visible": 1.0,
                                 "bAutoActivate": true,
                                 "bHiddenInGame": false,
+                                "bPerspective": false,
                                 "bVisible": true
                             }
                         },
@@ -526,10 +532,11 @@
                                 },
                                 "FadeIn": 0.0,
                                 "FadeOut": 0.0,
+                                "FovDegrees": 60.0,
                                 "SortOrder": 0,
                                 "Transform": {
                                     "Location": {
-                                        "X": 0.0,
+                                        "X": -2.468636989593506,
                                         "Y": -1.294187068939209,
                                         "Z": 0.0
                                     },
@@ -547,6 +554,7 @@
                                 "Visible": 10.0,
                                 "bAutoActivate": true,
                                 "bHiddenInGame": false,
+                                "bPerspective": false,
                                 "bVisible": true
                             }
                         },
@@ -628,9 +636,9 @@
                             "Properties": {
                                 "Transform": {
                                     "Location": {
-                                        "X": 0.0,
+                                        "X": -0.11952495574951172,
                                         "Y": -8.8052978515625,
-                                        "Z": 0.0
+                                        "Z": 0.11169278621673584
                                     },
                                     "Rotation": {
                                         "Pitch": 0.0,
@@ -638,9 +646,9 @@
                                         "Yaw": 0.0
                                     },
                                     "Scale": {
-                                        "X": 1.0,
+                                        "X": 0.9034623503684998,
                                         "Y": 10.193377494812012,
-                                        "Z": 1.0
+                                        "Z": 7.569714546203613
                                     }
                                 },
                                 "bAutoActivate": true,
@@ -651,7 +659,38 @@
                         {
                             "Class": "UStaticMeshComponent",
                             "Name": "UStaticMeshComponent",
-                            "OverrideMaterials": [],
+                            "OverrideMaterials": [
+                                {
+                                    "Base": "DefaultMaterial",
+                                    "Instance": {
+                                        "BaseColor": {
+                                            "W": 1.0,
+                                            "X": 1.0,
+                                            "Y": 1.0,
+                                            "Z": 1.0
+                                        },
+                                        "BlendState": "Opaque",
+                                        "FlipNormalY": false,
+                                        "PSOType": 0,
+                                        "Properties": {},
+                                        "SamplerState": "LinearClamp",
+                                        "Shininess": 32.0,
+                                        "SpecularColor": {
+                                            "X": 1.0,
+                                            "Y": 1.0,
+                                            "Z": 1.0
+                                        },
+                                        "Textures": [
+                                            "WhiteTexture",
+                                            "FlatNormalTexture"
+                                        ],
+                                        "UVScrollSpeed": [
+                                            0.0,
+                                            0.0
+                                        ]
+                                    }
+                                }
+                            ],
                             "Parent": "DefaultSceneRoot",
                             "Properties": {
                                 "StaticMesh": "Cube",
@@ -733,12 +772,13 @@
                                 },
                                 "FadeIn": 1.0,
                                 "FadeOut": 1.0,
+                                "FovDegrees": 60.0,
                                 "SortOrder": 0,
                                 "Transform": {
                                     "Location": {
-                                        "X": 0.0,
+                                        "X": -0.8929128646850586,
                                         "Y": -9.067497253417969,
-                                        "Z": 0.0
+                                        "Z": 0.6144623756408691
                                     },
                                     "Rotation": {
                                         "Pitch": 0.0,
@@ -754,6 +794,7 @@
                                 "Visible": 1.0,
                                 "bAutoActivate": true,
                                 "bHiddenInGame": false,
+                                "bPerspective": true,
                                 "bVisible": true
                             }
                         },
