@@ -381,6 +381,21 @@ namespace
 			if (bSelected) ImGui::SetItemDefaultFocus();
 			ImGui::PopID();
 		}
+
+		// 아직 로드되지 않은 메시는 경로만 보여 주고 고를 때 로드한다
+		for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::SkeletalMesh))
+		{
+			ImGui::PushID(ItemPath.c_str());
+			if (ImGui::Selectable(GetAssetDisplayName(ItemPath).c_str(), false))
+			{
+				if (USkeletalMesh* Mesh = UAssetManager::GetAssetByPath<USkeletalMesh>(ItemPath))
+				{
+					Component->SetSkeletalMesh(Mesh);
+				}
+			}
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ItemPath.c_str());
+			ImGui::PopID();
+		}
 		ImGui::EndCombo();
 	}
 

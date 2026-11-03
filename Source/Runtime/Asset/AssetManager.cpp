@@ -45,6 +45,10 @@ namespace
 		if (Extension == ".obj") {
 			return EAssetType::StaticMesh;
 		}
+		if (Extension == ".bin" && FFbxMeshBake::IsBakedPath(Path)) {
+			// 파일을 읽지 않고 구분하도록 FFbxImporter의 저장 이름 규칙을 쓴다
+			return Path.ends_with("_Static.fbx.bin") ? EAssetType::StaticMesh : EAssetType::SkeletalMesh;
+		}
 		return EAssetType::None;
 	}
 
@@ -206,6 +210,15 @@ void UAssetManager::ScanAssets(const fs::path& AssetRoot, const FAssetLoadProgre
 }
 
 void UAssetManager::LoadAsset(const FString& Key, const FString& Path) {
+	// FBX Asset은 원본 .fbx 대신 Import로 저장한 .fbx.bin만 로드한다.
+	// 원본 해석과 변경 여부 비교는 FFbxImporter::ImportToAssets에서만 수행하며,
+	// 이 로드 경로는 원본 파일이나 FBX SDK 없이 저장된 데이터로 렌더 자원을 만든다.
+	if (FFbxMeshBake::IsBakedPath(Path)) {
+		FString Error;
+		if (!LoadFbxMesh(Path, Error)) HTR_LOG(Error, "{}", Error);
+		return;
+	}
+
 	switch (GetAssetTypeFromPath(Path)) {
 	case EAssetType::Texture:
 		LoadTexture(Path);
@@ -218,13 +231,6 @@ void UAssetManager::LoadAsset(const FString& Key, const FString& Path) {
 		break;
 	default:
 		break;
-	}
-	// FBX Asset은 엔진 시작 시 원본 .fbx 대신 Import로 저장한 .fbx.bin만 로드한다.
-	// 원본 해석과 변경 여부 비교는 FFbxImporter::ImportToAssets에서만 수행하며,
-	// 이 로드 경로는 원본 파일이나 FBX SDK 없이 저장된 데이터로 렌더 자원을 만든다.
-	if (Extension == ".bin" && FFbxMeshBake::IsBakedPath(Path)) {
-		FString Error;
-		if (!LoadFbxMesh(Path, Error)) HTR_LOG(Error, "{}", Error);
 	}
 }
 
@@ -559,7 +565,8 @@ URenderAsset* UAssetManager::LoadFbxMesh(const FString& Path, FString& OutError)
 {
 	OutError.clear();
 	const FString Key = MakeAssetKey(Path);
-	if (auto* Cached = GetAssetByPath<URenderAsset>(Key)) return Cached;
+	// GetAssetByPath는 여기로 다시 들어오므로 쓰지 않는다
+	if (URenderAsset* Cached = FindLoadedAsset(Key)) return Cached;
 	FFbxBakedMesh Data;
 	if (!FFbxMeshBake::IsBakedPath(Path) || !FFbxMeshBake::Read(Path, Data, OutError))
 	{
@@ -611,7 +618,10 @@ void UAssetManager::ForEachObjStaticMesh(const std::function<void(const FString&
 {
 	for (const FString& Path : GetUnloadedAssetPaths(EAssetType::StaticMesh))
 	{
-		GetAssetByPath<UStaticMesh>(Path);
+		if (!FFbxMeshBake::IsBakedPath(Path))
+		{
+			GetAssetByPath<UStaticMesh>(Path);
+		}
 	}
 
 	for (auto& [Key, Asset] : Get().AssetMap)

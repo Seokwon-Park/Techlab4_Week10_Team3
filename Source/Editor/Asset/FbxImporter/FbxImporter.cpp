@@ -835,7 +835,7 @@ namespace
 		for (const auto& Path : Paths)
 		{
 			const FString Key = std::filesystem::relative(PathOf(Path), "Assets").generic_string();
-			if (bChanged && UAssetManager::GetAssetByPath<URenderAsset>(Key))
+			if (bChanged && UAssetManager::FindLoadedAsset(Key))
 			{
 				// TODO: 실행 중 로드된 Asset과 참조 중인 Material/Texture의 안전한 교체.
 				Warnings.Add("FBX: asset already loaded; restart the engine to use updated files: " + Key);

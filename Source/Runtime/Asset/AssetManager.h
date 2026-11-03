@@ -15,7 +15,8 @@ enum class EAssetType
 	None,
 	Texture,
 	Font,
-	StaticMesh
+	StaticMesh,
+	SkeletalMesh
 };
 
 class UStaticMesh;
