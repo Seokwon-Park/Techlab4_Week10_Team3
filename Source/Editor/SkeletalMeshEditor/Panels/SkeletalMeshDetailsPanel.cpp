@@ -10,9 +10,11 @@ FSkeletalMeshDetailsPanel::FSkeletalMeshDetailsPanel(FSkeletalMeshEditor& InEdit
 
 void FSkeletalMeshDetailsPanel::DrawContent()
 {
+	const int32 BoneIndex = Editor.GetSelectedBoneIndex();
+
 	if (ImGui::Button("Reset Transform"))
 	{
-		Editor.ResetPose();
+		Editor.ResetBone(BoneIndex);
 	}
 
 	ImGui::Separator();
@@ -24,7 +26,7 @@ void FSkeletalMeshDetailsPanel::DrawContent()
 		return;
 	}
 
-	const int32 BoneIndex = Editor.GetSelectedBoneIndex();
+
 
 	// 선택이 바뀌면 이전 본의 편집 상태가 새 본에 이어지지 않도록 ID를 구분합니다.
 	ImGui::PushID(BoneIndex);
