@@ -655,13 +655,16 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 
 						DecalBatches.Reset();
 						uint32 ReceiverItems = 0;
+						const FAABB DecalAABB = Decal->GetWorldAABB();
 
 						for (const FMeshDrawBatch& Src : ForwardBatches) {
 							FMeshDrawBatch Batch = Src;
 							Batch.Items.Reset();
 
 							for (const FMeshDrawBatch::FItem& Item : Src.Items) {
-								if (Item.bReceivesDecals) {
+								if (!Item.bReceivesDecals) continue;
+								RenderData.RenderStats.DecalItemsTested++;
+								if(IntersectAABB(DecalAABB, Item.Bounds)) {
 									Batch.Items.Push(Item);
 								}
 							}
