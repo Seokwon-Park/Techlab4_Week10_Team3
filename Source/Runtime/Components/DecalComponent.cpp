@@ -57,6 +57,19 @@ FAABB UDecalComponent::GetWorldAABB() const
 	return MakeWorldBounds(Local.GetWorldAABB(GetWorldMatrix()));
 }
 
+FOBB UDecalComponent::GetWorldOBB() const
+{
+	const FMatrix World = GetWorldMatrix();
+	FOBB OBB;
+	OBB.Center = GetWorldLocation();
+	OBB.Extent = Extent;
+	OBB.Axis[0] = FVector(World[0][0], World[0][1], World[0][2]).Normalized();
+	OBB.Axis[1] = FVector(World[1][0], World[1][1], World[1][2]).Normalized();
+	OBB.Axis[2] = FVector(World[2][0], World[2][1], World[2][2]).Normalized();
+
+	return OBB;
+}
+
 void UDecalComponent::CreateRenderState()
 {
 	Super::CreateRenderState();

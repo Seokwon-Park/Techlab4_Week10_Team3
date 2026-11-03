@@ -5,6 +5,11 @@
 struct FPlane { FVector Normal; float Distance; };
 struct FFrustumPlanes { FPlane Planes[6]; };
 struct FAABB { FVector Center; FVector Extent; };
+struct FOBB {
+	FVector Center;
+	FVector Axis[3];
+	FVector Extent;
+};
 
 struct FFrustumCorners
 {
@@ -45,6 +50,32 @@ inline bool IntersectAABB(const FAABB& A, const FAABB& B) {
 	if (std::abs(A.Center.X - B.Center.X) > A.Extent.X + B.Extent.X) return false;
 	if (std::abs(A.Center.Y - B.Center.Y) > A.Extent.Y + B.Extent.Y) return false;
 	if (std::abs(A.Center.Z - B.Center.Z) > A.Extent.Z + B.Extent.Z) return false;
+	return true;
+}
+
+inline bool IsSeparated(const FVector& L, const FOBB& A, const FAABB& B) {
+	// L : 분리축, A : OBB, B : AABB (SAT)
+	const FVector D = B.Center - A.Center;
+	const float d = std::abs(D | L);	// | : 내적
+
+	const float rA = std::abs(A.Extent.X * (A.Axis[0] | L)) +
+					std::abs(A.Extent.Y * (A.Axis[1] | L)) +
+					std::abs(A.Extent.Z * (A.Axis[2] | L));
+	const float rB = std::abs(B.Extent.X * L.X) +
+					std::abs(B.Extent.Y * L.Y) +
+					std::abs(B.Extent.Z * L.Z);
+	return d > rA + rB;		// 분리되어 있다! (만나지 않는다)
+}
+
+inline bool IntersectOBBAABB(const FOBB& A, const FAABB& B) {
+	const FVector WorldAxis[3] = { FVector(1, 0, 0), FVector(0, 1, 0), FVector(0, 0, 1) };
+
+	// OBB vs AABB 분리축 테스트!
+	for (int32 i = 0; i < 3; ++i) {
+		if (IsSeparated(A.Axis[i], A, B)) return false;
+		if (IsSeparated(WorldAxis[i], A, B)) return false;
+	}
+
 	return true;
 }
 

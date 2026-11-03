@@ -27,6 +27,7 @@ public:
 	float GetFade() const { return Fade; }
 
 	FAABB GetWorldAABB() const;
+	FOBB GetWorldOBB() const;
 
 protected:
 	virtual bool ShouldCreateRenderState() const override
