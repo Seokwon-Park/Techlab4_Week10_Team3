@@ -28,6 +28,28 @@ void FOBBTree::Build(const TArray<FVector>& Positions, const TArray<uint32>& Ind
 
 		// 삼각형 번호 추가
 		Triangles.Add(index);
-
 	}
+
+	BuildNode(0, static_cast<uint32> (Triangles.Num()), 0);
+}
+
+int32 FOBBTree::BuildNode(uint32 First, uint32 Count, uint32 Depth)
+{
+	FBox Bounds = TriangleBounds[Triangles[First]];
+	FOBBTreeNode Node;
+	// 범위 삼각형 전부 감싸는 상자 제작
+	for (uint32 i = First + 1; i < First + Count; i++) {
+		Bounds.Expand(TriangleBounds[Triangles[i]]);
+	}
+	Node.LocalBounds = Bounds;
+
+	Node.FirstTriangle = First;
+	Node.TriangleCount = Count;
+
+	const int32 NodeIndex = static_cast <int32>(Nodes.Num());
+	Nodes.Add(Node);
+
+	if (Depth >= MaxDepth || Count <= MinTriangles) return NodeIndex;
+
+	return NodeIndex;
 }

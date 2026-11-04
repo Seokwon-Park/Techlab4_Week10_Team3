@@ -17,6 +17,9 @@ public:
 	void Build(const TArray <FVector>& Positions, const TArray<uint32>& Indices);
 
 private:
+	int32 BuildNode(uint32 First, uint32 Count, uint32 Depth);
+
+private:
 	TArray <FOBBTreeNode> Nodes;
 	TArray <uint32> Triangles;
 
