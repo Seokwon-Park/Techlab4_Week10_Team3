@@ -86,12 +86,7 @@ UObject* StaticConstructObject_Internal(const FStaticConstructObjectParameters& 
 	if (!bRecycled)
 	{
 		Class->Constructor(Object);
-		Object->ClassPrivate = const_cast<UClass*>(Class);
 		HashObject(Object, Class);
-		Object->SetOuter(Params.Outer);
-		Object->SetName(Name);
-		if (Params.SetFlags != EObjectFlags::RF_NoFlags)
-			Object->SetFlags(Params.SetFlags);
 	}
 
 	return Object;
@@ -238,7 +233,7 @@ UObject* StaticAllocateObject(const UClass* InClass, UObject* InOuter, FName InN
 	if (!Obj)
 	{
 		//GUObjectAllocator.AllocateUObject
-		Obj = static_cast<UObject*>(UObject::operator new(InClass->ClassSize));
+		Obj = static_cast<UObject*>(UObject::operator new(InClass->Size));
 	}
 	else if (bCanRecycleSubobjects && Obj->HasAnyFlags(EObjectFlags::RF_DefaultSubObject))
 	{
@@ -251,8 +246,11 @@ UObject* StaticAllocateObject(const UClass* InClass, UObject* InOuter, FName InN
 	}
 
 	if (!bSubObject)
-		FMemory::Memzero(Obj, InClass->ClassSize);
-
+	{
+		FMemory::Memzero(Obj, InClass->Size);
+		// UE: new (Obj) UObjectBase(...). 생성자보다 먼저 Class/Outer/Name/Flags를 채운다.
+		::new (static_cast<void*>(Obj)) UObjectBase(const_cast<UClass*>(InClass), InFlags, InOuter, InName);
+	}
 	if (bOutRecycledSubobject)
 		*bOutRecycledSubobject = bSubObject;
 

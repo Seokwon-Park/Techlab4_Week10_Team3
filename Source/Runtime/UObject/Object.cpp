@@ -28,9 +28,9 @@ UObject::~UObject()
 {
 	if (bIsRegistered)
 	{
-		if (ClassPrivate)
+		if (GetClass())
 		{
-			UnhashObject(this, ClassPrivate);
+			UnhashObject(this, GetClass());
 		}
 		int32 LastIndex = GUObjectArray.Num() - 1;
 		if (InternalIndex != LastIndex)
@@ -51,7 +51,7 @@ UClass* UObject::StaticClass()
 	{
 		c.Name = "Object";
 		c.Super = nullptr;
-		c.ClassSize = sizeof(UObject);
+		c.Size = sizeof(UObject);
 		c.Constructor = [](void* Memory) -> UObject*
 			{
 				return ::new (Memory) UObject();
@@ -82,18 +82,7 @@ void UObject::Serialize(FStructuredArchive::FRecord Record)
 
 void UObject::SerializeScriptProperties(FStructuredArchive::FSlot Slot)
 {
-	FStructuredArchive::FRecord Properties = Slot.EnterRecord();
-
-	for (UClass* c = GetClass(); c; c = c->Super)
-	{
-		for (const FProperty* Property : c->GetProperties())
-		{
-			TOptional<FStructuredArchive::FSlot> Slot = Properties.TryEnterField(Property->Name.c_str(), true);
-			if (!Slot.IsSet()) continue;
-
-			Property->SerializeItem(Slot.GetValue(), Property->ContainerPtrToValuePtr(this));
-		}
-	}
+	GetClass()->SerializeTaggedProperties(Slot, this);
 }
 
 
