@@ -49,8 +49,10 @@ void UDecalComponent::SetDecalViewProj()
 	FMatrix View = LookAt(this->GetWorldLocation(), this->GetWorldLocation() + Forward, Up);
 	FMatrix Proj;
 	
-	if (bPerspective)
-		Proj = Perspective(FovDegrees, Extent.Y / Extent.Z, 0.1f, Extent.X * 2);
+	if (bPerspective) {
+		const float FovV = 2.0f * std::atan(Extent.Z / Extent.X);
+		Proj = Perspective(FovV, Extent.Y / Extent.Z, 0.1f, Extent.X);
+	}
 	else
 		Proj = Ortho(Extent.Y * 2, Extent.Y / Extent.Z, -Extent.X, Extent.X);
 	DecalViewProj = View * Proj;
@@ -58,6 +60,18 @@ void UDecalComponent::SetDecalViewProj()
 
 FAABB UDecalComponent::GetWorldAABB() const
 {
+	if (bPerspective) {
+		FVector Corners[8];
+		GetWorldCorners(Corners);
+
+		FBox Box{ Corners[0], Corners[0] };
+		for (int32 i = 1; i < 8; i++) {
+			Box.Expand(FBox{ Corners[i], Corners[i] });
+		}
+
+		return MakeWorldBounds(Box);
+	}
+
 	const FVector Scale = GetWorldScale3D();
 	const FBox Local { -Extent / Scale, Extent / Scale };
 	return MakeWorldBounds(Local.GetWorldAABB(GetWorldMatrix()));
@@ -67,11 +81,36 @@ FOBB UDecalComponent::GetWorldOBB() const
 {
 	const FMatrix World = GetWorldMatrix();
 	FOBB OBB;
-	OBB.Center = GetWorldLocation();
-	OBB.Extent = Extent;
 	OBB.Axis[0] = FVector(World[0][0], World[0][1], World[0][2]).Normalized();
 	OBB.Axis[1] = FVector(World[1][0], World[1][1], World[1][2]).Normalized();
 	OBB.Axis[2] = FVector(World[2][0], World[2][1], World[2][2]).Normalized();
+
+	if (bPerspective) {
+		FVector Corners[8];
+		GetWorldCorners(Corners);
+
+		FVector Center(0.f, 0.f, 0.f);
+		float Half[3];
+		for (int32 axis = 0; axis < 3; axis++) {
+			float Min = Corners[0] | OBB.Axis[axis];
+			float Max = Min;
+			// Corners와 Axis 내적의 최대 최소값 구하기
+			for (int32 i = 1; i < 8; i++) {
+				const float D = Corners[i] | OBB.Axis[axis];
+				Min = std::min(Min, D);
+				Max = std::max(Max, D);
+			}
+			Center = Center + OBB.Axis[axis] * (Min + Max) * 0.5f;
+			Half[axis] = (Max - Min) * 0.5f;
+		} 
+
+		OBB.Center = Center;
+		OBB.Extent = FVector(Half[0], Half[1], Half[2]);
+		return OBB;
+	}
+
+	OBB.Center = GetWorldLocation();
+	OBB.Extent = Extent;
 
 	return OBB;
 }
@@ -104,6 +143,9 @@ void UDecalComponent::DrawDebug(FLineBatcher* LineBatcher) const
 		if ((i & 2) == 0) LineBatcher->AddLine(Corners[i], Corners[i + 2], Color);
 		if ((i & 4) == 0) LineBatcher->AddLine(Corners[i], Corners[i + 4], Color);
 	}
+
+	const FAABB AABB = GetWorldAABB();
+	LineBatcher->AddBox(FBox{ AABB.Center - AABB.Extent, AABB.Center + AABB.Extent }, FVector4(0.3f, 0.8f, 1.f, 1.f));
 }
 
 void UDecalComponent::CreateRenderState()
