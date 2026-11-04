@@ -1189,7 +1189,8 @@ void UEditorEngine::RenderFrame(FEditorViewportClient* ViewClient,
 			const bool bDrawSelectedLight = bIsActiveViewport && Gizmo->GetTarget() &&
 				(Cast<ASpotLightActor>(Gizmo->GetTarget()->GetOwner()) ||
 					Cast<APointLightActor>(Gizmo->GetTarget()->GetOwner()) ||
-					Cast<ARectLightActor>(Gizmo->GetTarget()->GetOwner()));
+					Cast<ARectLightActor>(Gizmo->GetTarget()->GetOwner()) ||
+					Cast<ADecalActor>(Gizmo->GetTarget()->GetOwner()));
 
 			const bool bDrawCascadeBounds = SettingsPanel->GetSettings().bDrawCascadeBounds;
 			{
@@ -1226,6 +1227,7 @@ void UEditorEngine::RenderFrame(FEditorViewportClient* ViewClient,
 						{
 							LineBatcher->BuildVertexBuffer();
 						}
+						
 						if (bDrawSelectedLight)
 						{
 							if (ASpotLightActor* Light = Cast<ASpotLightActor>(Gizmo->GetTarget()->GetOwner()))
@@ -1234,6 +1236,8 @@ void UEditorEngine::RenderFrame(FEditorViewportClient* ViewClient,
 								Light->GetPointLightComponent()->DrawDebug(LineBatcher.get());
 							else if (ARectLightActor* Light = Cast<ARectLightActor>(Gizmo->GetTarget()->GetOwner()))
 								Light->GetRectLightComponent()->DrawDebug(LineBatcher.get());
+							else if (ADecalActor* Decal = Cast<ADecalActor>(Gizmo->GetTarget()->GetOwner()))
+								Decal->GetDecalComponent()->DrawDebug(LineBatcher.get());
 						}
 
 						const AActor* SelectedActor =

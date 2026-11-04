@@ -32,6 +32,9 @@ public:
 	FAABB GetWorldAABB() const;
 	FOBB GetWorldOBB() const;
 
+	void GetWorldCorners(FVector OutCorners[8]) const;
+	void DrawDebug(class FLineBatcher* LineBatcher) const;
+
 protected:
 	virtual bool ShouldCreateRenderState() const override
 	{

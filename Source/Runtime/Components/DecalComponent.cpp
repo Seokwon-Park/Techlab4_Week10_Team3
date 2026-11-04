@@ -3,6 +3,7 @@
 
 #include "Engine/Scene.h"
 #include "Engine/World.h"
+#include "Render/LineBatcher.h"
 
 void UDecalComponent::TickComponent(float DeltaTime)
 {
@@ -73,6 +74,36 @@ FOBB UDecalComponent::GetWorldOBB() const
 	OBB.Axis[2] = FVector(World[2][0], World[2][1], World[2][2]).Normalized();
 
 	return OBB;
+}
+
+void UDecalComponent::GetWorldCorners(FVector OutCorners[8]) const
+{
+	const FMatrix InvVP = DecalViewProj.Inverse();
+
+	for (int32 i = 0; i < 8; i++) {
+		const FVector4 NDC = FVector4((i & 1) ? 1.f : -1.f, 
+									(i & 2) ? 1.f : -1.f, 
+									(i & 4) ? 1.f : 0.f, 
+									1.f);
+		const FVector4 World = NDC * InvVP;
+		OutCorners[i] = FVector(World.X, World.Y, World.Z) / World.W;
+	}
+}
+
+void UDecalComponent::DrawDebug(FLineBatcher* LineBatcher) const
+{
+	if (LineBatcher == nullptr) return;
+
+	FVector Corners[8];
+	GetWorldCorners(Corners);
+
+	const FVector4 Color(1.f, 0.6f, 0.2f, 1.f);
+
+	for (int32 i = 0; i < 8; i++) {
+		if ((i & 1) == 0) LineBatcher->AddLine(Corners[i], Corners[i + 1], Color);
+		if ((i & 2) == 0) LineBatcher->AddLine(Corners[i], Corners[i + 2], Color);
+		if ((i & 4) == 0) LineBatcher->AddLine(Corners[i], Corners[i + 4], Color);
+	}
 }
 
 void UDecalComponent::CreateRenderState()
