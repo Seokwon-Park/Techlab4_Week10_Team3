@@ -52,6 +52,9 @@ void FSettingsPanel::OnRender()
 	ImGui::Checkbox("Use BVH", &Settings.bDecalBVHCulling);
 	ImGui::Unindent();
 	ImGui::Checkbox("Decal Narrow Phase (SAT)", &Settings.bDecalNarrowCulling);
+	ImGui::Indent();
+	ImGui::Checkbox("Use OBBTree", &Settings.bDecalOBBTree);
+	ImGui::Unindent();
 
 	const char* RenderingPaths[] = { "Forward", "Deferred" };
 	int RenderingPathIndex = static_cast<int>(Settings.RenderingPath);
@@ -200,6 +203,7 @@ bool FSettingsPanel::SaveSettings() const
 	File << "DecalCulling=" << Settings.bDecalCulling << "\n";
 	File << "DecalNarrowCulling=" << Settings.bDecalNarrowCulling << "\n";
 	File << "DecalBVHCulling=" << Settings.bDecalBVHCulling << "\n";
+	File << "DecalOBBTree=" << Settings.bDecalOBBTree << "\n";
 	File << "DrawBatchLine=" << Settings.bDrawBatchLine << "\n";
 	File << "DrawCascadeBounds=" << Settings.bDrawCascadeBounds << "\n";
 	File << "DrawPSGrid=" << Settings.bDrawPSGrid << "\n";
@@ -355,6 +359,7 @@ bool FSettingsPanel::LoadSettings()
 				else if (Key == "DecalCulling") Settings.bDecalCulling = std::stoi(ValueStr);
 				else if (Key == "DecalNarrowCulling") Settings.bDecalNarrowCulling = std::stoi(ValueStr);
 				else if (Key == "DecalBVHCulling") Settings.bDecalBVHCulling = std::stoi(ValueStr);
+				else if (Key == "DecalOBBTree") Settings.bDecalOBBTree = std::stoi(ValueStr);
 				else if (Key == "DrawBatchLine") Settings.bDrawBatchLine = std::stoi(ValueStr);
 				else if (Key == "DrawCascadeBounds") Settings.bDrawCascadeBounds = std::stoi(ValueStr);
 				else if (Key == "DrawPSGrid") Settings.bDrawPSGrid = std::stoi(ValueStr);

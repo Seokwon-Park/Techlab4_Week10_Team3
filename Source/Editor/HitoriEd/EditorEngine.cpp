@@ -949,6 +949,7 @@ void UEditorEngine::BuildSceneRenderOptions(FEditorViewportClient* ViewClient, b
 	Options.bDecalCulling = S.bDecalCulling;
 	Options.bDecalNarrowCulling = S.bDecalNarrowCulling;
 	Options.bDecalBVHCulling = S.bDecalBVHCulling;
+	Options.bDecalOBBTree = S.bDecalOBBTree;
 }
 
 // 게임 뷰포트 화면을 렌더링한다

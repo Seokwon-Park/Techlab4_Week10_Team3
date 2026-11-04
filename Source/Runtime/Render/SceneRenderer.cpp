@@ -640,7 +640,8 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			Decal.ReadTextures = {};
 			Decal.Viewport = {};
 			if (!Graph.AddRasterPass(std::move(Decal), [this, Renderer, bDecalCulling = Options.bDecalCulling, 
-				bDecalNarrowCulling = Options.bDecalNarrowCulling, bDecalBVHCulling = Options.bDecalBVHCulling]
+				bDecalNarrowCulling = Options.bDecalNarrowCulling, bDecalBVHCulling = Options.bDecalBVHCulling,
+				bDecalOBBTree = Options.bDecalOBBTree]
 				{
 					SCOPE_CYCLE_COUNTER(STAT_DecalPass);
 					if (!bCorePassSucceeded || ForwardBatches.IsEmpty()) return;
@@ -719,6 +720,16 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 
 								RenderData.RenderStats.DecalNarrowTested++;
 								if (bDecalNarrowCulling && !IntersectOBBAABB(DecalOBB, Item.Bounds)) return;
+
+								if (bDecalNarrowCulling && bDecalOBBTree && Item.Proxy && Item.Proxy->GetMesh()) {
+									const FStaticMeshData& MeshData = Item.Proxy->GetMesh()->GetMeshData();
+									FMatrix LocalToWorld = Item.Proxy->GetLocalToWorld();
+									if (MeshData.OBBTree) {
+										RenderData.RenderStats.DecalOBBTreeTested++;
+										if (!MeshData.OBBTree->Intersects(DecalOBB, LocalToWorld)) return;
+									}
+									
+								}
 
 								FMeshDrawBatch& Header = DecalHeaders[Ref.Batch];
 								if (Header.Items.IsEmpty()) TouchedBatches.Add(Ref.Batch);
