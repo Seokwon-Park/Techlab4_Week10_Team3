@@ -14,10 +14,15 @@ struct FOBBTreeNode {
 
 class FOBBTree {
 public:
+	void Build(const TArray <FVector>& Positions, const TArray<uint32>& Indices);
+
 private:
 	TArray <FOBBTreeNode> Nodes;
 	TArray <uint32> Triangles;
 
 	static constexpr uint32 MaxDepth = 8;
 	static constexpr uint32 MinTriangles = 8;
+
+	TArray<FBox> TriangleBounds;
+	TArray<FVector> Centroids;	// 삼각형 무게중심 모음
 };
