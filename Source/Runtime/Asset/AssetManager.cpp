@@ -80,6 +80,7 @@ namespace
 		}
 
 		Mesh->MeshData.BuildTriangleBVH();
+		Mesh->MeshData.BuildOBBTree();
 		Mesh->RebuildRenderData();
 
 		return Mesh;
@@ -468,6 +469,7 @@ bool UAssetManager::ReorientStaticMesh(UStaticMesh& Mesh, const std::function<FV
 	Mesh.VertexBuffer = std::move(VB);
 
 	Data.BuildTriangleBVH();   // 피킹용 삼각형 BVH도 새 좌표로
+	Data.BuildOBBTree();
 	return true;
 }
 

@@ -49,12 +49,14 @@ int32 FOBBTree::BuildNode(uint32 First, uint32 Count, uint32 Depth)
 	const int32 NodeIndex = static_cast <int32>(Nodes.Num());
 	Nodes.Add(Node);
 
+	// 기저 조건
 	if (Depth >= MaxDepth || Count <= MinTriangles) return NodeIndex;
 
+
+	// 반으로 쪼개기
 	const FVector Size = Bounds.Max - Bounds.Min;
 	int32 axisIndex = Size.X > Size.Y ? 0 : 1;
 	if (Size.Z > Size[axisIndex]) axisIndex = 2;
-	
 
 	const float Mid = (Bounds.Min[axisIndex] + Bounds.Max[axisIndex]) * 0.5f;
 	auto Begin = Triangles.begin() + First;
@@ -67,6 +69,13 @@ int32 FOBBTree::BuildNode(uint32 First, uint32 Count, uint32 Depth)
 	if (LeftCount == 0 || LeftCount == Count) {
 		LeftCount = Count / 2;
 	}
+
+	// 재귀
+	const int32 Left = BuildNode(First, LeftCount, Depth + 1);
+	const int32 Right = BuildNode(First + LeftCount, Count - LeftCount, Depth + 1);
+
+	Nodes[NodeIndex].Left = Left;
+	Nodes[NodeIndex].Right = Right;
 
 	return NodeIndex;
 }
