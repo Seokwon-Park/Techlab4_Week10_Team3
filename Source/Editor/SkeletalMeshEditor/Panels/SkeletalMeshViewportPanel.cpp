@@ -101,6 +101,14 @@ void FSkeletalMeshViewportPanel::DrawContent()
 		{
 			Editor.SetGizmoMode(EGizmoMode::Scale);
 		}
+
+		// 뷰포트에서 Space를 누를 때마다 이동, 회전, 크기 모드를 순환합니다.
+		if (bFocused && bHovered && !IO.WantTextInput && !IO.AppFocusLost &&
+			!Editor.IsGizmoDragging() && ImGui::IsKeyPressed(ImGuiKey_Space, false))
+		{
+			const int32 NextMode = (static_cast<int32>(Editor.GetGizmoMode()) + 1) % IM_ARRAYSIZE(GizmoModeNames);
+			Editor.SetGizmoMode(static_cast<EGizmoMode>(NextMode));
+		}
 	}
 
 	// 렌더 타깃 변경은 Editor의 다음 Render에서 수행합니다.

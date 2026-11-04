@@ -58,6 +58,9 @@ public:
 	// 카메라를 메시에 포커싱합니다.
 	void FocusMesh();
 
+	// 프리뷰 카메라 이동 속도를 1.0~150.0 범위로 설정합니다.
+	void SetCameraSpeed(float Speed) { CameraSpeed = FMath::Clamp(Speed, 1.0f, 150.0f); }
+
 	// 본을 선택합니다. -1은 선택을 해제합니다.
 	void SelectBone(int32 BoneIndex);
 
@@ -95,6 +98,7 @@ public:
 	EGizmoMode GetGizmoMode() const { return BoneGizmo.GetMode(); }
 	EGizmoSpace GetGizmoSpace() const { return BoneGizmo.GetSpace(); }
 	bool IsGizmoDragging() const { return BoneGizmo.IsUsing(); }
+	float GetCameraSpeed() const { return CameraSpeed; }
 
 	const TArray<int32>& GetRootBoneIndices() const { return RootBoneIndices; }
 	const TArray<FEditorBoneItem>& GetBoneItems() const { return BoneItems; }
@@ -138,6 +142,7 @@ private:
 	FQuat DragParentRotation;
 
 	FViewportCameraInput CameraInput;
+	float CameraSpeed = 5.0f;
 
 	uint32 ViewportWidth = 0;
 	uint32 ViewportHeight = 0;

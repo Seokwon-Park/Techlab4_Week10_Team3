@@ -9,6 +9,14 @@ FSkeletalMeshSettingsPanel::FSkeletalMeshSettingsPanel(FSkeletalMeshEditor& InEd
 
 void FSkeletalMeshSettingsPanel::DrawContent()
 {
+	float CameraSpeed = Editor.GetCameraSpeed();
+	ImGui::TextUnformatted("Camera Speed");
+	ImGui::SetNextItemWidth(-FLT_MIN);
+	if (ImGui::SliderFloat("##CameraSpeed", &CameraSpeed, 1.0f, 150.0f, "%.1f", ImGuiSliderFlags_AlwaysClamp))
+	{
+		Editor.SetCameraSpeed(CameraSpeed);
+	}
+
 	if (ImGui::Button("Reset All Transform"))
 	{
 		Editor.ResetPose();

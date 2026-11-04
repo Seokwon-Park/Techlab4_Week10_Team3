@@ -201,7 +201,7 @@ void FSkeletalMeshEditor::Tick(float DeltaTime)
 			.ViewWidth = static_cast<float>(ViewportWidth),
 			.bPerspective = true
 		};
-		ApplyViewportCameraMovement(Camera, CameraInput, DeltaTime, 5.0f, 0.2f);
+		ApplyViewportCameraMovement(Camera, CameraInput, DeltaTime, CameraSpeed, 0.2f);
 		ViewportClient->SetViewLocation(Camera.Location);
 		ViewportClient->SetViewRotation(Camera.Rotation);
 	}
