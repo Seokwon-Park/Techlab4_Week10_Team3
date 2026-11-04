@@ -114,6 +114,15 @@ void FEditorControlsPanel::OnRender()
 	if (ImGui::Button("Test Bone Stick"))
 		World->SpawnActor(ASkeletalMeshActor::StaticClass());
 
+	if (ImGui::Checkbox("GPU Skinning", &USkinnedMeshComponent::bUseGPUSkinning))
+	{
+		for (AActor* Actor : World->GetPersistentLevel()->GetActors())
+		{
+			if (ASkeletalMeshActor* SkelActor = Cast<ASkeletalMeshActor>(Actor))
+				SkelActor->GetSkeletalMeshComponent()->RefreshSkinningMode();
+		}
+	}
+
 	static float Bone1Pitch = 0.0f;
 	if (ImGui::SliderFloat("Bone_1 Pitch", &Bone1Pitch, -90.0f, 90.0f))
 	{

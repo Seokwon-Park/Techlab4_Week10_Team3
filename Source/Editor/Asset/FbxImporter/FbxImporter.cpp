@@ -189,9 +189,9 @@ namespace
 		if (std::find(Warnings.begin(), Warnings.end(), Text) == Warnings.end()) Warnings.Add(Text);
 	}
 
-	FVector MirrorY(const FbxVector4& Value)
+	FVector ToVector(const FbxVector4& Value)
 	{
-		return FVector(static_cast<float>(Value[0]), static_cast<float>(-Value[1]), static_cast<float>(Value[2]));
+		return FVector(static_cast<float>(Value[0]), static_cast<float>(Value[1]), static_cast<float>(Value[2]));
 	}
 
 	// Mapping은 대상 칸을, Reference는 그 칸이 값인지 값 배열의 Index인지를 결정한다.
@@ -376,8 +376,9 @@ namespace
 		
 		// SDK는 열벡터이므로 엔진의 p*G*M에 해당하는 행렬은 M*G다.
 		const FbxAMatrix Total = Global * Geometric;
-		// 출력 때 적용하는 Y 반전 C의 determinant는 -1이다. 최종 G*M*C 기준으로 검사한다.
-		const double FinalDeterminant = -Total.Determinant();
+		// 좌표계 반사와 Polygon 순서는 DeepConvertScene에서 변환됐다.
+		// 여기서는 정점에 굽는 Geometric/Global의 음수 Scale에 의한 뒤집기만 검사한다.
+		const double FinalDeterminant = Total.Determinant();
 		if (!std::isfinite(FinalDeterminant) || FinalDeterminant == 0) { Error = "singular/non-finite mesh transform"; return false; }
 		
 		const FbxAMatrix NormalMatrix = Total.Inverse().Transpose();
@@ -406,7 +407,7 @@ namespace
 			else Warn(Warnings, "Missing material layer uses slot 0: " + FString(Node->GetName()));
 			uint32 Triangle[3];
 			// 각 꼭짓점의 CP(위치 번호)와 PV(Polygon Vertex 칸 번호)로 Normal/UV/Color를 조회한다.
-			// Position/Normal을 변환하고 Y 반전, Normal 정규화, UV의 V 반전을 적용한다.
+			// 엔진 좌표계의 Position/Normal을 옮기고 Normal 정규화와 UV의 V 반전을 적용한다.
 			// 같은 (CP, Normal, UV, Color) 조합은 기존 정점을 재사용하고, 새 정점이면 CP 대응표와 AABB도 갱신한다.
 			// Triangle에 넣는 값은 CP 번호가 아니라 최종 Geometry.Vertices의 정점 번호다.
 			for (int Corner = 0; Corner < 3; ++Corner)
@@ -427,8 +428,8 @@ namespace
 				const double Length = std::sqrt(TransformedNormal[0] * TransformedNormal[0] + TransformedNormal[1] * TransformedNormal[1] + TransformedNormal[2] * TransformedNormal[2]);
 				if (!std::isfinite(Length) || Length == 0) { Error = "zero/non-finite normal"; return false; }
 				FVertex Vertex;
-				Vertex.Position = MirrorY(Total.MultT(Mesh->GetControlPointAt(CP)));
-				Vertex.Normal = MirrorY(TransformedNormal / Length);
+				Vertex.Position = ToVector(Total.MultT(Mesh->GetControlPointAt(CP)));
+				Vertex.Normal = ToVector(TransformedNormal / Length);
 				Vertex.UV = FVector2(static_cast<float>(UV[0]), UVs ? static_cast<float>(1.0 - UV[1]) : 0.0f);
 				Vertex.Color = FVector4(static_cast<float>(Color.mRed), static_cast<float>(Color.mGreen), static_cast<float>(Color.mBlue), static_cast<float>(Color.mAlpha));
 				const FVertexKey Key{ CP, { Vertex.Normal.X, Vertex.Normal.Y, Vertex.Normal.Z, Vertex.UV.X, Vertex.UV.Y, Vertex.Color.X, Vertex.Color.Y, Vertex.Color.Z, Vertex.Color.W } };
@@ -584,15 +585,11 @@ bool FFbxImporter::ReadMeshData(TArray<FString>& OutWarnings, FString& OutError)
 	}
 
 	FbxRootNodeUtility::RemoveAllFbxRoots(Scene);
-	// 엔진의 최종 기준은 UE처럼 왼손 좌표계(+Z 위, +X 앞)다.
-	// Target은 SDK 축 변환에 사용할 중간 기준(+Z 위, +X 앞, 오른손)이며, 생성만으로 Scene은 바뀌지 않는다.
-	// ConvertScene은 Scene 바로 아래 Node의 회전으로 축을 맞추므로 오른손/왼손 전환은 처리하지 못한다.
-	// 따라서 eLeftHanded를 지정하는 것만으로는 엔진 좌표계로 변환되지 않는다. (SDK fbxaxissystem.h의 ConvertScene 설명)
-	// 여기서는 Node Transform과 Scene의 축 정보를 갱신하고, 자식은 부모의 변환을 상속한다.
-	// 이후 Position/Normal을 엔진 데이터로 옮길 때 Y를 반전하여 왼손 기준을 완성한다.
-	// Index 교환도 이 Y 반전까지 포함한 최종 변환의 determinant를 기준으로 처리한다.
-	const FbxAxisSystem Target(FbxAxisSystem::eZAxis, FbxAxisSystem::eParityEven, FbxAxisSystem::eRightHanded);
-	if (Scene->GetGlobalSettings().GetAxisSystem() != Target) Target.ConvertScene(Scene);
+	// Mesh/Bone을 읽기 전에 장면 전체를 엔진 좌표계(+Z 위, +X 앞, 왼손)로 맞춘다.
+	// DeepConvertScene은 Transform뿐 아니라 정점/Normal, Polygon 순서, Pose/Cluster도 변환한다.
+	// 이후 값을 옮길 때 Y나 Quaternion을 다시 반전하지 않는다.
+	const FbxAxisSystem Target(FbxAxisSystem::eZAxis, FbxAxisSystem::eParityEven, FbxAxisSystem::eLeftHanded);
+	if (Scene->GetGlobalSettings().GetAxisSystem() != Target) Target.DeepConvertScene(Scene);
 	// 단위도 설정값만 바꾸는 것이 아니라 Scene 데이터를 cm 기준으로 실제 변환한다.
 	if (Scene->GetGlobalSettings().GetSystemUnit() != FbxSystemUnit::cm) FbxSystemUnit::cm.ConvertScene(Scene);
 	// 축/단위 변환 전 자식 Node의 Global 캐시가 남지 않도록 비운다. UE ConvertScene 경로와 같은 처리다.
@@ -728,12 +725,12 @@ bool FFbxImporter::ReadSkeletonData(TArray<FString>& OutWarnings, FString& OutEr
 		const FbxVector4 Translation = Local.GetT();
 		const FbxQuaternion Rotation = Local.GetQ();
 		const FbxVector4 Scale = Local.GetS();
-		// Position과 같은 Y 반전을 Transform에도 적용한다. Quaternion은 (x,-y,z,-w), Scale은 그대로다.
-		Bone.LocalBindPose.Location = MirrorY(Translation);
+		// Scene의 Bind 행렬도 이미 엔진 좌표계이므로 분해한 TRS에 추가 반사를 하지 않는다.
+		Bone.LocalBindPose.Location = ToVector(Translation);
 		Bone.LocalBindPose.Scale = FVector(static_cast<float>(Scale[0]), static_cast<float>(Scale[1]), static_cast<float>(Scale[2]));
 		// SDK에서 Euler로 변환하여 정확히 +/-90도인 회전도 보존한다. FRotator 저장 순서는 Pitch(Y), Yaw(Z), Roll(X)다.
 		FbxAMatrix EngineRotation;
-		EngineRotation.SetQ(FbxQuaternion(Rotation[0], -Rotation[1], Rotation[2], -Rotation[3]));
+		EngineRotation.SetQ(Rotation);
 		const FbxVector4 Euler = EngineRotation.GetR();
 		Bone.LocalBindPose.Rotation = FRotator(static_cast<float>(Euler[1]), static_cast<float>(Euler[2]), static_cast<float>(Euler[0]));
 		const FMatrix LocalMatrix = Bone.LocalBindPose.GetLocalMatrix();

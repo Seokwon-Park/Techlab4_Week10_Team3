@@ -37,6 +37,7 @@ namespace
 		if (Name == "Off") return ELightCullingMode::Off;
 		if (Name == "Tiled") return ELightCullingMode::Tiled;
 		if (Name == "Clustered") return ELightCullingMode::Clustered;
+		if (Name == "Tiled25D") return ELightCullingMode::Tiled25D;
 		return Fallback;
 	}
 }

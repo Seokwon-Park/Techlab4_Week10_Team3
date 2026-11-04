@@ -85,7 +85,7 @@ namespace
 			else if (View.bIsWireframe && Type == EPSOType::StaticMesh_Opaque)
 				Type = EPSOType::StaticMesh_Wireframe;
 			FPipelineState* Pipeline = FRenderResourceManager::GetPSO(Type);
-			if (!Pipeline) return false;
+			if (!Pipeline || !Pipeline->Shader) return false;
 			Batch.Pipeline = *Pipeline;
 			Batch.bForceWireframe = Pass == EMeshPassType::GBuffer && View.bIsWireframe;
 			if (Material->PSOType == EPSOType::StaticMesh_Opaque ||
@@ -123,6 +123,17 @@ namespace
 				Texture = nullptr;
 			Batch.Textures.Add({ Texture, Stages });
 		}
+		return true;
+	}
+
+	// 패킷에 본 버퍼가 있으면 같은 패스의 GPU 스킨 변형으로 바꾼다
+	bool ApplyGpuSkin(FMeshDrawBatch& Batch, const FRenderPacket& Packet)
+	{
+		if (!Packet.BoneBuffer) return true;
+		FShaderProgram* Skinned = FRenderResourceManager::GetShaderProgram(Batch.Pipeline.Shader->Name + "#GPU_SKIN");
+		if (!Skinned) return false;
+		Batch.Pipeline.Shader = Skinned;
+		Batch.BoneBuffer = Packet.BoneBuffer;
 		return true;
 	}
 
@@ -239,6 +250,7 @@ bool FMeshPassProcessor::Build(const FSceneView& View, const FRenderQueue& Queue
 		FIndexBuffer* IB = Packet.Mesh ? Packet.Mesh->GetIndexBuffer(Packet.LODIndex) : Packet.IndexBuffer;
 		if (!BuildBatch(Batch, VB, IB, Packet.Material, Pass, View,
 			LightingModel, Packet.MaterialParamData, Packet.MaterialParamDataSize)) return false;
+		if (!ApplyGpuSkin(Batch, Packet)) continue;
 
 		const uint32 IndexCount = Packet.IndexCount ? Packet.IndexCount : Batch.IndexBuffer->GetIndexCount();
 		const void* ObjectKey = Packet.Proxy ? static_cast<const void*>(Packet.Proxy) : static_cast<const void*>(&Packet);
@@ -277,6 +289,7 @@ bool FMeshPassProcessor::Build(const TArray<FPrimitiveSceneProxy*>& ShadowMeshes
 				Batch.Pipeline = *Pipeline;
 				Batch.VertexBuffer = Packet.VertexBuffer;
 				Batch.IndexBuffer = Packet.IndexBuffer;
+				if (!ApplyGpuSkin(Batch, Packet)) continue;
 				Batch.bUseObjectSlots = false;
 				Batch.bBindViewConstants = true;
 				Batch.ObjectBindingSlot = 2;
