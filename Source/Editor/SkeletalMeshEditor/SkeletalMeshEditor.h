@@ -74,6 +74,9 @@ public:
 	// 본 시각화의 표시 여부를 설정합니다.
 	void SetBoneVisualizerVisible(bool bVisible) { bShowBoneVisualizer = bVisible; }
 
+	// 본 시각화의 기본 색상을 설정합니다.
+	void SetBoneVisualizerColor(const FVector4& Color) { BoneVisualizerColor = Color; }
+
 	// 뷰포트 상태를 설정합니다. (뷰포트가 보이지 않으면 입력을 무시합니다)
 	void SetViewportState(uint32 Width, uint32 Height, const FViewportCameraInput& Input,
 		const FBoneGizmoInput& InGizmoInput = {});
@@ -97,10 +100,11 @@ public:
 	const TArray<FEditorBoneItem>& GetBoneItems() const { return BoneItems; }
 	int32 GetSelectedBoneIndex() const { return SelectedBoneIndex; }
 	bool IsBoneVisualizerVisible() const { return bShowBoneVisualizer; }
+	const FVector4& GetBoneVisualizerColor() const { return BoneVisualizerColor; }
 
 protected:
 	// 이 에디터에 연결된 탭을 생성합니다.
-	TUniquePtr<class IEditorTab> CreateTab() override;
+	TUniquePtr<IEditorTab> CreateTab() override;
 
 	// 리소스를 초기화합니다.
 	bool InitializeResources() override;
@@ -112,9 +116,15 @@ protected:
 	void BuildBoneItems();
 
 private:
+	// 기즈모 조작과 본 피킹에 공통으로 필요한 뷰포트 입력 상태를 확인합니다.
+	bool CanProcessViewportInput() const;
+
 	// 현재 포즈의 본 월드 변환을 Gizmo 대상에 반영합니다.
 	void SyncBoneGizmo();
-	void UpdateBoneGizmo();
+	// 기즈모가 입력을 소비했으면 true를 반환합니다.
+	bool UpdateBoneGizmo();
+	void UpdateBonePicking();
+	int32 PickBone(const FVector2& MousePosition) const;
 	void ApplyBoneGizmoTransform();
 	FQuat GetBoneWorldRotation(int32 BoneIndex) const;
 
@@ -138,6 +148,7 @@ private:
 
 	FBox MeshBox;
 	float BoneSphereSize = 0.0f;
+	FVector4 BoneVisualizerColor = FVector4(0.0f, 0.0f, 0.0f, 1.0f);
 
 	bool bShowBoneVisualizer = true;
 	bool bViewportVisible = false;

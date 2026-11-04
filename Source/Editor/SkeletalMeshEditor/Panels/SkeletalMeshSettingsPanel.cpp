@@ -14,6 +14,14 @@ void FSkeletalMeshSettingsPanel::DrawContent()
 		Editor.ResetPose();
 	}
 
+	FVector4 BoneVisualizerColor = Editor.GetBoneVisualizerColor();
+	ImGui::TextUnformatted("Bone Visualizer Color");
+	ImGui::SetNextItemWidth(-FLT_MIN);
+	if (ImGui::ColorEdit3("##BoneVisualizerColor", &BoneVisualizerColor.X))
+	{
+		Editor.SetBoneVisualizerColor(BoneVisualizerColor);
+	}
+
 	bool bShowBoneVisualizer = Editor.IsBoneVisualizerVisible();
 	if (ImGui::Checkbox("Show Bone Visualizer", &bShowBoneVisualizer))
 	{

@@ -8,6 +8,34 @@
 #include "Render/SkeletalMesh.h"
 #include "Render/LineBatcher.h"
 
+namespace
+{
+	// 원근 나눗셈 전에 선분을 깊이 범위(0 <= Z <= W)로 잘라냅니다.
+	bool ClipBoneSegmentToView(FVector4& Start, FVector4& End)
+	{
+		const auto ClipPlane = [&](float StartDistance, float EndDistance)
+		{
+			if (StartDistance < 0.0f && EndDistance < 0.0f)
+			{
+				return false;
+			}
+
+			if (StartDistance < 0.0f || EndDistance < 0.0f)
+			{
+				const float Alpha = StartDistance / (StartDistance - EndDistance);
+				const FVector4 Intersection = Start + (End - Start) * Alpha;
+				(StartDistance < 0.0f ? Start : End) = Intersection;
+			}
+
+			return true;
+		};
+
+		return ClipPlane(Start.Z, End.Z) &&
+			ClipPlane(Start.W - Start.Z, End.W - End.Z) &&
+			Start.W >= 0.0001f && End.W >= 0.0001f;
+	}
+}
+
 // Bone의 네임스페이스를 제외한 마지막 콜론 뒤의 이름만 반환
 FString GetBoneDisplayName(const FString& BoneName)
 {
@@ -181,7 +209,13 @@ void FSkeletalMeshEditor::Tick(float DeltaTime)
 	// 부모 Tick 호출 (PreviewScene Tick)
 	FAssetEditor::Tick(DeltaTime);
 
-	UpdateBoneGizmo();
+	const bool bGizmoConsumedInput = UpdateBoneGizmo();
+
+	if (!bGizmoConsumedInput)
+	{
+		UpdateBonePicking();
+	}
+
 	CameraInput = {};
 	GizmoInput = {};
 
@@ -274,13 +308,45 @@ FQuat FSkeletalMeshEditor::GetBoneWorldRotation(int32 BoneIndex) const
 	return (MeshComponent->GetWorldRotation().Quaternion() * Rotation).Normalized();
 }
 
-void FSkeletalMeshEditor::UpdateBoneGizmo()
+bool FSkeletalMeshEditor::CanProcessViewportInput() const
 {
-	if (!bViewportVisible || !GizmoInput.bFocused || !BoneGizmo.GetTarget() ||
-		ViewportClient->GetWidth() != ViewportWidth || ViewportClient->GetHeight() != ViewportHeight)
+	if
+		(
+			// 뷰포트 클라이언트가 없으면 입력을 무시
+			!ViewportClient ||
+
+			// 뷰포트가 보이지 않으면 입력을 무시
+			!bViewportVisible ||
+
+			// 뷰포트가 포커싱되지 않으면 입력을 무시
+			!GizmoInput.bFocused ||
+
+			// 뷰포트 너비가 변경되면 입력을 무시
+			ViewportClient->GetWidth() != ViewportWidth ||
+
+			// 뷰포트 높이가 변경되면 입력을 무시
+			ViewportClient->GetHeight() != ViewportHeight
+			)
+	{
+		return false;
+	}
+
+	return true;
+}
+
+bool FSkeletalMeshEditor::UpdateBoneGizmo()
+{
+	if
+		(
+			// 공통 뷰포트 입력 조건을 만족하지 않으면 입력을 무시
+			!CanProcessViewportInput() ||
+
+			// BoneGizmo의 대상이 없으면 입력을 무시
+			!BoneGizmo.GetTarget()
+			)
 	{
 		BoneGizmo.EndDrag();
-		return;
+		return false;
 	}
 
 	if (GizmoInput.bCancel)
@@ -291,14 +357,14 @@ void FSkeletalMeshEditor::UpdateBoneGizmo()
 			MeshComponent->RefreshBoneTransformsNow();
 		}
 		BoneGizmo.EndDrag();
-		return;
+		return false;
 	}
 
 	const bool bWasUsing = BoneGizmo.IsUsing();
 	if ((!GizmoInput.bHovered && !bWasUsing) || CameraInput.bCaptured)
 	{
 		BoneGizmo.EndDrag();
-		return;
+		return false;
 	}
 
 	SyncBoneGizmo();
@@ -322,7 +388,7 @@ void FSkeletalMeshEditor::UpdateBoneGizmo()
 		if (BoneGizmo.GetMode() == EGizmoMode::Location && fabsf(ParentWorld.Determinant()) < 1e-12f)
 		{
 			BoneGizmo.EndDrag();
-			return;
+			return true;
 		}
 
 		DragStartBoneTransform = MeshComponent->GetBoneLocalTransform(SelectedBoneIndex);
@@ -341,6 +407,143 @@ void FSkeletalMeshEditor::UpdateBoneGizmo()
 			BoneGizmo.EndDrag();
 		}
 	}
+
+	return bWasUsing || BoneGizmo.IsUsing() || BoneGizmo.GetHoveredAxis() >= 0;
+}
+
+void FSkeletalMeshEditor::UpdateBonePicking()
+{
+	if
+		(
+			// 공통 뷰포트 입력 조건을 만족하지 않으면 입력을 무시
+			!CanProcessViewportInput() ||
+
+			// 스켈레탈 메시가 없으면 입력을 무시
+			!Mesh ||
+
+			// 프리뷰 메시 컴포넌트가 없으면 입력을 무시
+			!MeshComponent ||
+
+			// 본 시각화가 꺼져 있으면 입력을 무시
+			!bShowBoneVisualizer ||
+
+			// 마우스가 뷰포트 위에 없으면 입력을 무시
+			!GizmoInput.bHovered ||
+
+			// 좌클릭이 시작된 프레임이 아니면 입력을 무시
+			!GizmoInput.bMousePressed ||
+
+			// 취소 입력이 들어오면 입력을 무시
+			GizmoInput.bCancel ||
+
+			// 카메라를 조작 중이면 입력을 무시
+			CameraInput.bCaptured ||
+
+			// 기즈모를 드래그 중이면 입력을 무시
+			BoneGizmo.IsUsing() ||
+
+			// 뷰포트 너비가 0이면 입력을 무시
+			ViewportWidth == 0 ||
+
+			// 뷰포트 높이가 0이면 입력을 무시
+			ViewportHeight == 0
+			)
+	{
+		return;
+	}
+
+	const FVector2 MousePosition(GizmoInput.MouseUV.X * ViewportWidth,
+		GizmoInput.MouseUV.Y * ViewportHeight);
+	SelectBone(PickBone(MousePosition));
+}
+
+int32 FSkeletalMeshEditor::PickBone(const FVector2& MousePosition) const
+{
+	constexpr float HitPixels = 12.0f;
+	constexpr float DistanceTolerance = 0.001f;
+	const FMatrix ViewProjection = ViewportClient->GetViewProjectionMatrix();
+	const TArray<FBoneInfo>& Bones = Mesh->GetRefSkeleton();
+
+	TArray<FVector4> ClipPositions;
+	ClipPositions.SetNum(Bones.Num());
+	for (int32 Index = 0; Index < Bones.Num(); ++Index)
+	{
+		const FVector Position = MeshComponent->GetBoneWorldMatrix(Index)
+			.TransformPosition(FVector::ZeroVector);
+		ClipPositions[Index] = FVector4(Position, 1.0f) * ViewProjection;
+	}
+
+	const auto ToScreen = [&](const FVector4& Clip)
+	{
+		return FVector2((Clip.X / Clip.W * 0.5f + 0.5f) * ViewportWidth,
+			(0.5f - Clip.Y / Clip.W * 0.5f) * ViewportHeight);
+	};
+
+	int32 BestBoneIndex = -1;
+	float BestDistance = HitPixels;
+	float BestDepth = FLT_MAX;
+	const auto ConsiderCandidate = [&](int32 Index, float Distance, float Depth)
+	{
+		// 화면 거리가 같은 후보는 카메라에 가까운 본을 선택합니다.
+		if (Distance <= HitPixels && (BestBoneIndex < 0 ||
+			Distance < BestDistance - DistanceTolerance ||
+			(fabsf(Distance - BestDistance) <= DistanceTolerance && Depth < BestDepth)))
+		{
+			BestBoneIndex = Index;
+			BestDistance = Distance;
+			BestDepth = Depth;
+		}
+	};
+
+	// 관절을 먼저 검사하여 루트와 말단 본도 선택할 수 있게 합니다.
+	for (int32 Index = 0; Index < Bones.Num(); ++Index)
+	{
+		const FVector4& Clip = ClipPositions[Index];
+		if (Clip.W < 0.0001f || Clip.Z < 0.0f || Clip.Z > Clip.W)
+		{
+			continue;
+		}
+
+		const FVector2 Delta = MousePosition - ToScreen(Clip);
+		ConsiderCandidate(Index, sqrtf(Delta.X * Delta.X + Delta.Y * Delta.Y), Clip.Z / Clip.W);
+	}
+
+	if (BestBoneIndex >= 0)
+	{
+		return BestBoneIndex;
+	}
+
+	// 관절에 맞지 않았다면 부모와 자식을 잇는 선분을 검사합니다.
+	for (int32 Index = 0; Index < Bones.Num(); ++Index)
+	{
+		const int32 ParentIndex = Bones[Index].ParentIndex;
+		if (ParentIndex < 0 || ParentIndex >= Bones.Num())
+		{
+			continue;
+		}
+
+		FVector4 Start = ClipPositions[ParentIndex];
+		FVector4 End = ClipPositions[Index];
+		if (!ClipBoneSegmentToView(Start, End))
+		{
+			continue;
+		}
+
+		const FVector2 ScreenStart = ToScreen(Start);
+		const FVector2 ScreenEnd = ToScreen(End);
+		const FVector2 Segment = ScreenEnd - ScreenStart;
+		const FVector2 ToMouse = MousePosition - ScreenStart;
+		const float LengthSquared = Segment.X * Segment.X + Segment.Y * Segment.Y;
+		const float Alpha = LengthSquared > 1e-6f
+			? FMath::Clamp((ToMouse.X * Segment.X + ToMouse.Y * Segment.Y) / LengthSquared, 0.0f, 1.0f)
+			: 0.0f;
+
+		// NDC 깊이는 화면 선분의 비율로 보간합니다. 연결선은 부모 본을 선택합니다.
+		const float Depth = Start.Z / Start.W * (1.0f - Alpha) + End.Z / End.W * Alpha;
+		ConsiderCandidate(ParentIndex, DistanceToSegment(MousePosition, ScreenStart, ScreenEnd), Depth);
+	}
+
+	return BestBoneIndex;
 }
 
 void FSkeletalMeshEditor::ApplyBoneGizmoTransform()
@@ -455,7 +658,7 @@ void FSkeletalMeshEditor::OnRenderLine(FLineBatcher& LineBatcher)
 	{
 		const FVector4 Color = Index == SelectedBoneIndex
 			? FVector4(1.0f, 1.0f, 0.0f, 1.0f)
-			: FVector4(0.0f, 0.0f, 0.0f, 1.0f);
+			: BoneVisualizerColor;
 		
 		// Joint 먼저 그리기
 		LineBatcher.AddSphere(Positions[Index], BoneSphereSize, Color);
@@ -465,7 +668,7 @@ void FSkeletalMeshEditor::OnRenderLine(FLineBatcher& LineBatcher)
 		// 부모가 있다면, 부모에서 자식으로 이어지는 Bone을 그리기
 		if (ParentIndex >= 0 && ParentIndex < Bones.Num())
 		{
-			FVector4 BoneColor(0.0f, 0.0f, 0.0f, 1.0f);
+			FVector4 BoneColor = BoneVisualizerColor;
 			if (Index == SelectedBoneIndex)
 			{
 				// 현재 본이 선택한 본이면 부모 본을 노란색으로 표시
@@ -476,10 +679,16 @@ void FSkeletalMeshEditor::OnRenderLine(FLineBatcher& LineBatcher)
 				// 부모 Index가 선택된 본이면 부모 본을 주황색으로 표시
 				BoneColor = FVector4(1.0f, 1.0f, 0.0f, 1.0f);
 			}
+			
+			// ParentIndex -> Index Direction
+			const FVector Direction = (Positions[Index] - Positions[ParentIndex]).Normalized();
+
+			const FVector Start = Positions[ParentIndex] + Direction * BoneSphereSize;
+			const FVector End = Positions[Index] - Direction * BoneSphereSize;
 
 			const float Length = (Positions[Index] - Positions[ParentIndex]).Size();
 			const float HalfWidth = FMath::Min(BoneSphereSize * 1.5f, Length * 0.1f);
-			LineBatcher.AddPyramid(Positions[ParentIndex], Positions[Index], HalfWidth, BoneColor);
+			LineBatcher.AddPyramid(Start, End, HalfWidth, BoneColor);
 		}
 	}
 }
