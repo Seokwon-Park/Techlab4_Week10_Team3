@@ -182,10 +182,25 @@ bool FGizmo::ApplyScaleToLight(float Factor)
 // 시작 Transform·교차점을 저장하고 조작 축의 드래그 평면을 정한다.
 void FGizmo::BeginDrag(int Axis, const FRay& MouseRay, const FVector2& MousePos)
 {
+	// 부모의 변환 행렬에 Scale이 0이 포함되면 역행렬이 존재하지 않아서 드래그를 진행할 수 없음
+	// 따라서, 부모의 WorldMatrix의 행렬식이 0이라면 드래그 종료
+	if (Mode == EGizmoMode::Location && Target->GetAttachParent() &&
+		fabsf(Target->GetAttachParent()->GetWorldMatrix().Determinant()) < 1e-12f)
+	{
+		EndDrag();
+		return;
+	}
+
 	DragStartMousePos = MousePos;
 	DraggingAxis = Axis;
-	DragStartLocation = GetLocation();
+	DragStartLocation = Target->GetWorldLocation();
 	DragStartRenderLocation = GetRenderLocation();    
+	if (Mode == EGizmoMode::Location)
+	{
+		// 이동량은 모든 에디터에서 실제 대상 위치를 지나는 평면으로 계산합니다.
+		DragStartRenderLocation = Target->GetWorldLocation();
+	}
+
 	DragStartRotation = GetRotation();
 	DragStartScale = GetScale();
 
@@ -245,7 +260,7 @@ void FGizmo::UpdateDrag(const FRay& MouseRay, const FVector2& MousePos)
 	if (DraggingAxis == AXIS_SCREEN && Mode != EGizmoMode::Rotation)
 	{
 		if (Mode == EGizmoMode::Location)
-			Target->SetRelativeLocation(DragStartLocation + (current - DragStartPoint));
+			Target->SetWorldLocation(DragStartLocation + (current - DragStartPoint), false);
 		else
 		{
 			float dx = MousePos.X - DragStartMousePos.X;
@@ -279,7 +294,7 @@ void FGizmo::UpdateDrag(const FRay& MouseRay, const FVector2& MousePos)
 	float amount = delta.Dot(DragAxisDirection);
 
 	if (Mode == EGizmoMode::Location)
-		Target->SetRelativeLocation(DragStartLocation + DragAxisDirection * amount);
+		Target->SetWorldLocation(DragStartLocation + DragAxisDirection * amount, false);
 	else   // Scale
 	{
 		float factor = 1.0f + amount;
@@ -301,6 +316,7 @@ void FGizmo::UpdateDrag(const FRay& MouseRay, const FVector2& MousePos)
 void FGizmo::EndDrag()
 {
 	DraggingAxis = -1;
+	HoveredAxis = -1;
 }
 
 // 평면 기저에 점을 투영하고 atan2로 회전각을 구한다.
@@ -330,6 +346,12 @@ float FGizmo::ComputeAngleOnPlane(const FVector& Point, int Axis) const
 	return atan2f(local.Dot(v), local.Dot(u));
 }
 
+FRotator FGizmo::GetAxisRotation() const
+{
+	// 이동 Ray와 평면은 월드 공간이므로 부모 회전까지 포함한 축을 사용합니다.
+	return Mode == EGizmoMode::Location && Target ? Target->GetWorldRotation() : GetRotation();
+}
+
 // 월드 축 또는 로컬 회전으로 변환한 정규화 축을 반환한다.
 FVector FGizmo::GetAxisDirection(int Axis) const
 {
@@ -338,7 +360,7 @@ FVector FGizmo::GetAxisDirection(int Axis) const
 
 	if (bUseLocal && Target)
 	{
-		FMatrix rot = Target->GetRelativeRotation().Quaternion().ToFMatrix();
+		FMatrix rot = GetAxisRotation().Quaternion().ToFMatrix();
 		FVector4 v = rot.TransformVector(AxisDirs[Axis]);
 		return FVector(v.X, v.Y, v.Z).Normalized();
 	}

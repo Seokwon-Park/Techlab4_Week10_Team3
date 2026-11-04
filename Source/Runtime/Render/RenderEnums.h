@@ -27,7 +27,8 @@ enum class ELightCullingMode
 {
     Off = 0,
     Tiled = 1,
-    Clustered = 2
+    Clustered = 2,
+    Tiled25D = 3
 };
 
 enum class EPcfMode : uint32_t

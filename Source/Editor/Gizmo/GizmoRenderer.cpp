@@ -78,7 +78,7 @@ void FGizmoRenderer::OnRender(
 		if (Gizmo.GetMode() == EGizmoMode::Scale || Gizmo.GetSpace() == EGizmoSpace::Local)
 		{
 			FMatrix AxisRot = AxisDataArray[i].Rotator.Quaternion().ToFMatrix();
-			FMatrix ObjRot = Gizmo.GetRotation().Quaternion().ToFMatrix();
+			FMatrix ObjRot = Gizmo.GetAxisRotation().Quaternion().ToFMatrix();
 			FMatrix Trans = FMatrix::MakeTranslation(GizmoLocation);
 			World = AxisRot * ObjRot * Trans;
 		}

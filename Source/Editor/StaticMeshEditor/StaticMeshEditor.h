@@ -9,7 +9,7 @@ class FStaticMeshEditor : public FAssetEditor
 public:
 	FStaticMeshEditor(
 		class UEditorEngine& InEditorEngine,
-		class FEditorUI& InEditorUI,
+		class FEditorManager& InEditorManager,
 		const FString& InAssetPath,
 		class UStaticMesh& InMesh
 	);
@@ -22,7 +22,7 @@ public:
 	void Tick(float DeltaTime) override;
 	
 	// 현재 상태를 렌더링합니다.
-	void Render() override;
+	void OnRenderPreview() override;
 	
 
 	////////////////////////////////////////////////////////////

@@ -1,17 +1,17 @@
 #include "EnginePCH.h"
 #include "Editor/AssetEditor/AssetEditor.h"
 #include "Editor/AssetEditor/AssetEditorTab.h"
-#include "Editor/EditorUI/EditorUI.h"
+#include "Editor/AssetEditor/EditorManager.h"
 #include "Editor/HitoriEd/EditorEngine.h"
 #include "Runtime/Render/LineBatcher.h"
 
 FAssetEditor::FAssetEditor(
 	UEditorEngine& InEditorEngine,
-	FEditorUI& InEditorUI,
+	FEditorManager& InEditorManager,
 	const FString& InAssetPath
 )
 	: EditorEngine(InEditorEngine)
-	, EditorUI(InEditorUI)
+	, EditorManager(InEditorManager)
 	, AssetPath(InAssetPath)
 {
 }
@@ -21,7 +21,7 @@ FAssetEditor::~FAssetEditor()
 	// 파생 클래스의 자원 정리는 Manager가 소멸 전에 Shutdown으로 수행한다.
 	if (Tab)
 	{
-		EditorUI.RemoveEditorTab(Tab.get());
+		EditorManager.RemoveEditorTab(Tab.get());
 	}
 }
 
@@ -50,7 +50,7 @@ bool FAssetEditor::Initialize()
 		return false;
 	}
 
-	EditorUI.AddEditorTab(Tab.get());
+	EditorManager.AddEditorTab(Tab.get());
 	bInitialized = true;
 	Activate();
 	return true;
@@ -61,7 +61,7 @@ void FAssetEditor::Tick(float DeltaTime)
 	PreviewScene.Tick(DeltaTime);
 }
 
-void FAssetEditor::Render()
+void FAssetEditor::OnRenderPreview()
 {
 	// 프리뷰 장면과 뷰포트 렌더링은 후속 단계에서 연결한다.
 }
@@ -70,7 +70,7 @@ void FAssetEditor::Activate()
 {
 	if (Tab && !bCloseRequested)
 	{
-		EditorUI.ActivateEditorTab(Tab.get());
+		EditorManager.ActivateEditorTab(Tab.get());
 	}
 }
 
@@ -84,7 +84,7 @@ void FAssetEditor::Close()
 	bCloseRequested = true;
 	if (Tab)
 	{
-		EditorUI.RequestCloseEditorTab(Tab.get());
+		EditorManager.RequestCloseEditorTab(Tab.get());
 	}
 }
 
@@ -99,14 +99,14 @@ void FAssetEditor::Shutdown()
 	bCloseRequested = true;
 	if (Tab)
 	{
-		EditorUI.RemoveEditorTab(Tab.get());
+		EditorManager.RemoveEditorTab(Tab.get());
 		Tab.reset();
 	}
 	ShutdownResources();
 	bInitialized = false;
 }
 
-void FAssetEditor::OnLineRender(FLineBatcher& LineBatcher)
+void FAssetEditor::OnRenderLine(FLineBatcher& LineBatcher)
 {
 }
 

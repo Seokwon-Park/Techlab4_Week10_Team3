@@ -5,13 +5,14 @@
 #include "Editor/AssetEditor/FPreviewScene.h"
 
 class FEditorViewportClient;
+class FGizmo;
 
 class FAssetEditor
 {
 public:
 	FAssetEditor(
 		class UEditorEngine& InEditorEngine,
-		class FEditorUI& InEditorUI,
+		class FEditorManager& InEditorManager,
 		const FString& InAssetPath
 	);
 	virtual ~FAssetEditor();
@@ -28,7 +29,7 @@ public:
 	virtual void Tick(float DeltaTime);
 	
 	// 현재 상태를 렌더링합니다.
-	virtual void Render();
+	virtual void OnRenderPreview();
 
 	// Editor를 포커싱합니다.
 	void Activate();
@@ -39,7 +40,7 @@ public:
 	// Editor를 정리합니다.
 	void Shutdown();
 
-	virtual void OnLineRender(class FLineBatcher& LineBatcher);
+	virtual void OnRenderLine(class FLineBatcher& LineBatcher);
 
 	////////////////////////////////////////////////////////////
 	// Getter
@@ -49,6 +50,7 @@ public:
 	const FString& GetAssetPath() const { return AssetPath; }
 	FPreviewScene& GetPreviewScene() { return PreviewScene; }
 	FEditorViewportClient* GetViewportClient() const { return ViewportClient.get(); }
+	virtual const FGizmo* GetPreviewGizmo() const { return nullptr; }
 
 	bool IsCloseRequested() const { return bCloseRequested; }
 
@@ -63,7 +65,7 @@ protected:
 	virtual void ShutdownResources();
 
 	UEditorEngine& EditorEngine;
-	FEditorUI& EditorUI;
+	FEditorManager& EditorManager;
 	FPreviewScene PreviewScene;
 
 	TUniquePtr<FEditorViewportClient> ViewportClient;

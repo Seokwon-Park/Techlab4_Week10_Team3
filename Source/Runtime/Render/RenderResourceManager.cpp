@@ -22,9 +22,9 @@ struct FPipelineTableEntry
 
 constexpr FPipelineTableEntry PipelineTable[] =
 {
-	{ EPSOType::StaticMesh_Opaque,       "Resources/Shader/StaticMeshShader.hlsl",            EPrimitiveTopology::TriangleList, ERasterizerState::SolidBack, EBlendState::Opaque,       EDepthStencilState::Default },
+	{ EPSOType::StaticMesh_Opaque,       nullptr,                                            EPrimitiveTopology::TriangleList, ERasterizerState::SolidBack, EBlendState::Opaque,       EDepthStencilState::Default },
 	{ EPSOType::StaticMesh_Translucent,  "Resources/Shader/StaticMeshTranslucentShader.hlsl", EPrimitiveTopology::TriangleList, ERasterizerState::SolidBack, EBlendState::AlphaBlend,   EDepthStencilState::ReadOnly },
-	{ EPSOType::StaticMesh_Wireframe,    "Resources/Shader/StaticMeshShader.hlsl",    EPrimitiveTopology::TriangleList, ERasterizerState::Wireframe, EBlendState::Opaque,       EDepthStencilState::Default },
+	{ EPSOType::StaticMesh_Wireframe,    nullptr,                                    EPrimitiveTopology::TriangleList, ERasterizerState::Wireframe, EBlendState::Opaque,       EDepthStencilState::Default },
 	{ EPSOType::Particle_AlphaBlend,     "Resources/Shader/ParticleSubUVShader.hlsl", EPrimitiveTopology::TriangleList, ERasterizerState::SolidNone, EBlendState::AlphaBlend,   EDepthStencilState::ReadOnly },
 	{ EPSOType::Particle_Additive,       "Resources/Shader/ParticleSubUVShader.hlsl", EPrimitiveTopology::TriangleList, ERasterizerState::SolidNone, EBlendState::Additive,     EDepthStencilState::ReadOnly },
 	{ EPSOType::Skybox,                  "Resources/Shader/SkyboxShader.hlsl",        EPrimitiveTopology::TriangleList, ERasterizerState::SolidNone, EBlendState::Opaque,       EDepthStencilState::ReadOnly },
@@ -42,7 +42,7 @@ constexpr FPipelineTableEntry PipelineTable[] =
 	{ EPSOType::StaticMesh_DepthOnly, "Resources/Shader/DepthPrepass.hlsl", EPrimitiveTopology::TriangleList, ERasterizerState::SolidBack, EBlendState::NoColorWrite, EDepthStencilState::Default },
 	{ EPSOType::StaticMesh_LightShadow, "Resources/Shader/DepthPrepass.hlsl", EPrimitiveTopology::TriangleList, ERasterizerState::LightShadow, EBlendState::NoColorWrite, EDepthStencilState::Default },
 	{ EPSOType::LightCullingDebug, "Resources/Shader/LightCullingDebug.hlsl", EPrimitiveTopology::TriangleList, ERasterizerState::SolidNone, EBlendState::AlphaBlend, EDepthStencilState::Disabled },
-	{ EPSOType::ShadowTileClear, "Resources/Shader/ShadowTileClear.hlsl", EPrimitiveTopology::TriangleList, ERasterizerState::SolidNone, EBlendState::NoColorWrite, EDepthStencilState::AlwaysWrite },
+	{ EPSOType::ShadowTileClear, nullptr, EPrimitiveTopology::TriangleList, ERasterizerState::SolidNone, EBlendState::NoColorWrite, EDepthStencilState::AlwaysWrite },
 	{ EPSOType::ShadowDepth, "Resources/Shader/ShadowDepth.hlsl", EPrimitiveTopology::TriangleList, ERasterizerState::LightShadow, EBlendState::NoColorWrite, EDepthStencilState::Default },
 	{ EPSOType::ShadowProjection, "Resources/Shader/ShadowProjection.hlsl", EPrimitiveTopology::TriangleList, ERasterizerState::SolidNone, EBlendState::ShadowMaskR, EDepthStencilState::Disabled },
 	{ EPSOType::ShadowMaskVisualize, "Resources/Shader/ShadowMaskVisualize.hlsl", EPrimitiveTopology::TriangleList, ERasterizerState::SolidNone, EBlendState::Opaque, EDepthStencilState::Disabled },
@@ -68,11 +68,6 @@ void FRenderResourceManager::InitPipelineStates()
 		State->BlendState = Entry.BlendState;
 		State->DepthStencilState = Entry.DepthStencilState;
 	}
-	// Shadow 배치가 참조하는 VS 전용 프로그램은 리소스 매니저가 소유한다.
-	FShaderProgram* DepthProgram = GetShaderProgram("Resources/Shader/DepthPrepass.hlsl");
-	if (DepthProgram && DepthProgram->VertexShader)
-		ShaderProgramMap["ShadowDepth"] = MakeUnique<FShaderProgram>(DepthProgram->VertexShader, nullptr);
-
 	const char* Names[] = { "LIGHTING_MODEL_GOURAUD", "LIGHTING_MODEL_LAMBERT", "LIGHTING_MODEL_PHONG", "LIGHTING_MODEL_UNLIT", "VIEW_MODE_WORLD_NORMAL" };
 	for (const char* Name : Names)
 	{
@@ -100,15 +95,11 @@ void FRenderResourceManager::InitPipelineStates()
 		VertexShaderMap[Key + "#VS"] = std::move(VS);
 		PixelShaderMap[Key + "#PS"] = std::move(PS);
 		ShaderProgramMap[Key] = MakeUnique<FShaderProgram>(VSRaw, PSRaw);
+		ShaderProgramMap[Key]->Name = Key;
+		CreateSkinnedVariant(Path, Name, *ShaderProgramMap[Key]);
 		if (std::strcmp(Name, "VIEW_MODE_WORLD_NORMAL") == 0)
 			PipelineStateMap[EPSOType::StaticMesh_WorldNormal]->Shader = ShaderProgramMap[Key].get();
 	}
-}
-
-FShaderProgram* FRenderResourceManager::GetShadowDepthShaderProgram()
-{
-	if (auto* Found = Get().ShaderProgramMap.Find("ShadowDepth")) return Found->get();
-	return nullptr;
 }
 
 FShaderProgram* FRenderResourceManager::GetForwardShaderProgram(ELightingModel Model)
@@ -158,6 +149,11 @@ void FRenderResourceManager::ScanShaders(const fs::path& ShaderRoot)
 
 		FString Path = Entry.path().generic_string();
 		LoadOrCompileShader(Path);
+		if (Source.find("GPU_SKIN_VS_INPUT") != std::string::npos)
+		{
+			if (TUniquePtr<FShaderProgram>* Base = ShaderProgramMap.Find(Path))
+				CreateSkinnedVariant(Path, nullptr, **Base);
+		}
 	}
 }
 
@@ -212,7 +208,35 @@ void FRenderResourceManager::LoadOrCompileShader(const FString& Path)
 	VertexShaderMap[VSCSOPath] = std::move(Vs);
 	PixelShaderMap[PSCSOPath] = std::move(Ps);
 	ShaderProgramMap[Path] = MakeUnique<FShaderProgram>(VsRaw, PsRaw);
+	ShaderProgramMap[Path]->Name = Path;
 
 	HTR_LOG(Info, "[Shader] loaded: {}", Path);
 
+}
+
+// UberLit 조명 변형처럼 매크로로 VS를 컴파일하고 이름으로 등록한다. PS는 기존 것을 함께 쓴다
+void FRenderResourceManager::CreateSkinnedVariant(const FString& Path, const char* LightingMacro, const FShaderProgram& Base)
+{
+	const D3D_SHADER_MACRO SkinOnly[] = { { "GPU_SKIN", "1" }, { nullptr, nullptr } };
+	const D3D_SHADER_MACRO LitSkin[] = { { LightingMacro, "1" }, { "GPU_SKIN", "1" }, { nullptr, nullptr } };
+
+	FString CSOPath;
+	FShaderByteCode Code = RenderUtil::GetOrCompile(Path, "mainVS", EShaderType::Vertex, CSOPath, LightingMacro ? LitSkin : SkinOnly);
+	if (!Code.IsValid())
+	{
+		HTR_LOG(Error, "[Shader] GPU skin variant compile failed: {}", Base.Name);
+		return;
+	}
+	TUniquePtr<FVertexShader> VS = RenderCommand::CreateVertexShader(Code);
+	if (!VS || !VS->IsValid())
+	{
+		HTR_LOG(Error, "[Shader] GPU skin variant create failed: {}", Base.Name);
+		return;
+	}
+
+	FVertexShader* VSRaw = VS.get();
+	VertexShaderMap[CSOPath] = std::move(VS);
+	const FString Key = Base.Name + "#GPU_SKIN";
+	ShaderProgramMap[Key] = MakeUnique<FShaderProgram>(VSRaw, Base.PixelShader);
+	ShaderProgramMap[Key]->Name = Key;
 }

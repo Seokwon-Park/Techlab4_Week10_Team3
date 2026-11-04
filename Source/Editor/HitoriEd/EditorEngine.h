@@ -19,7 +19,7 @@
 #include "Render/RenderGraph/RenderGraph.h"
 
 
-#include "Editor/EditorUI/EditorUI.h"
+#include "Editor/LevelEditor/LevelEditorTab.h"
 #include "Editor/AssetEditor/EditorManager.h"
 #include "Editor/OutputLog/OutputLogPanel.h"
 #include "Editor/Details/DetailsPanel.h"
@@ -147,7 +147,6 @@ private:
 	FSwapchain* MainWindowSC = nullptr;
 	FRenderer* Renderer = nullptr;
 
-	TUniquePtr<FEditorUI> EditorUI;
 	TUniquePtr<FEditorManager> EditorManager;
 
 	TUniquePtr<FImGuiRenderer> ImGuiRenderer;
@@ -166,7 +165,7 @@ private:
 
 	UFont* SystemFont;
 
-	FLevelEditorTab* LevelEditorTab;
+	FLevelEditorTab* LevelEditorTab = nullptr;
 	FOutputLogPanel* OutputLogPanel = nullptr;
 
 	FDetailsPanel* DetailsPanel = nullptr;

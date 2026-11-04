@@ -19,9 +19,11 @@ public:
 
 	void DrawMainMenuBar();
 
-	void OnRender();
+	void OnRender(bool bPassthruCentralNode = false);
 
 private:
+	void DrawTabs();
+
 	static bool IsInDockSpace(const ImGuiWindow* Window, ImGuiID DockSpaceId);
 
 	static void DrawTabMenu(IEditorTab& Tab);

@@ -115,7 +115,7 @@ void FEditorTabContainer::DrawMainMenuBar()
 	}
 }
 
-void FEditorTabContainer::OnRender()
+void FEditorTabContainer::DrawTabs()
 {
 	assert(!bRendering);
 	bRendering = true;
@@ -238,4 +238,37 @@ void FEditorTabContainer::DrawTabMenu(IEditorTab& Tab)
 		}
 		ImGui::PopID();
 	}
+}
+
+void FEditorTabContainer::OnRender(bool bPassthruCentralNode)
+{
+	const ImGuiViewport* Viewport = ImGui::GetMainViewport();
+	ImGui::SetNextWindowPos(Viewport->WorkPos);
+	ImGui::SetNextWindowSize(Viewport->WorkSize);
+	ImGui::SetNextWindowViewport(Viewport->ID);
+
+	ImGuiWindowFlags Flags = ImGuiWindowFlags_MenuBar
+		| ImGuiWindowFlags_NoDocking
+		| ImGuiWindowFlags_NoTitleBar
+		| ImGuiWindowFlags_NoCollapse
+		| ImGuiWindowFlags_NoResize
+		| ImGuiWindowFlags_NoMove
+		| ImGuiWindowFlags_NoBringToFrontOnFocus
+		| ImGuiWindowFlags_NoNavFocus;
+
+	if (bPassthruCentralNode)
+		Flags |= ImGuiWindowFlags_NoBackground;
+
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowRounding, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowBorderSize, 0.0f);
+	ImGui::PushStyleVar(ImGuiStyleVar_WindowPadding, ImVec2(0.0f, 0.0f));
+	// 메뉴 높이를 먼저 확보하고 탭 선택이 확정된 후 내용을 그린다.
+	ImGui::PushStyleVar(ImGuiStyleVar_FramePadding, ImVec2(8.0f, 10.0f));
+	ImGui::Begin("DockingSpace", nullptr, Flags);
+	ImGui::PopStyleVar(4);
+
+	DrawTabs();
+	DrawMainMenuBar();
+	ImGui::End();
+	ProcessCloseRequests();
 }

@@ -44,6 +44,7 @@ struct FMeshDrawBatch
 
 	FVertexBuffer* VertexBuffer = nullptr;
 	FIndexBuffer* IndexBuffer = nullptr;
+	const FStructuredBuffer* BoneBuffer = nullptr;
 
 	TArray<FTextureBinding> Textures;
 	ESamplerState Sampler = ESamplerState::LinearClamp;

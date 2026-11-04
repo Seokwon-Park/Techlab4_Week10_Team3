@@ -1,6 +1,5 @@
 #include "EnginePCH.h"
 #include "Editor/AssetEditor/EditorManager.h"
-#include "Editor/EditorUI/EditorUI.h"
 #include "Editor/StaticMeshEditor/StaticMeshEditor.h"
 #include "Editor/SkeletalMeshEditor/SkeletalMeshEditor.h"
 #include "Asset/AssetManager.h"
@@ -10,10 +9,11 @@
 #include "Render/SkeletalMesh.h"
 #include <filesystem>
 
-FEditorManager::FEditorManager(UEditorEngine& InEditorEngine, FEditorUI& InEditorUI)
+FEditorManager::FEditorManager(UEditorEngine& InEditorEngine)
 	: EditorEngine(InEditorEngine)
-	, EditorUI(InEditorUI)
+	, LevelEditorTab(MakeUnique<FLevelEditorTab>())
 {
+	TabContainer.AddTab(LevelEditorTab.get());
 }
 
 void FEditorManager::OpenEditor(const FString& AssetPath)
@@ -104,13 +104,13 @@ void FEditorManager::CreateEditor(const FString& AssetPath)
 	if (Asset->IsA<UStaticMesh>())
 	{
 		UStaticMesh* MeshAsset = Cast<UStaticMesh>(Asset);
-		Editor = MakeUnique<FStaticMeshEditor>(EditorEngine, EditorUI, AssetPath, *MeshAsset);
+		Editor = MakeUnique<FStaticMeshEditor>(EditorEngine, *this, AssetPath, *MeshAsset);
 	}
 
 	if (Asset->IsA<USkeletalMesh>())
 	{
 		USkeletalMesh* MeshAsset = Cast<USkeletalMesh>(Asset);
-		Editor = MakeUnique<FSkeletalMeshEditor>(EditorEngine, EditorUI, AssetPath, *MeshAsset);
+		Editor = MakeUnique<FSkeletalMeshEditor>(EditorEngine, *this, AssetPath, *MeshAsset);
 	}
 
 	// 지원하지 않는 타입
@@ -134,6 +134,13 @@ void FEditorManager::CreateEditor(const FString& AssetPath)
 
 void FEditorManager::Tick(float DeltaTime)
 {
+	if (bShuttingDown)
+	{
+		return;
+	}
+
+	LevelEditorTab->Tick(DeltaTime);
+
 	for (auto& Editor : Editors)
 	{
 		if (!Editor->IsCloseRequested())
@@ -143,13 +150,13 @@ void FEditorManager::Tick(float DeltaTime)
 	}
 }
 
-void FEditorManager::Render()
+void FEditorManager::RenderPreview()
 {
 	for (auto& Editor : Editors)
 	{
 		if (!Editor->IsCloseRequested())
 		{
-			Editor->Render();
+			Editor->OnRenderPreview();
 		}
 	}
 }
@@ -192,4 +199,12 @@ void FEditorManager::Shutdown()
 		Editor->Shutdown();
 	}
 	Editors.Empty();
+
+	TabContainer.RemoveTab(LevelEditorTab.get());
+	LevelEditorTab.reset();
+}
+
+void FEditorManager::DrawEditorUI()
+{
+	TabContainer.OnRender();
 }

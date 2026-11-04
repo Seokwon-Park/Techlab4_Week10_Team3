@@ -1,5 +1,6 @@
 #include "EnginePCH.h"
 #include "Editor/Settings/SettingsPanel.h"
+#include "Asset/AssetManager.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 
@@ -67,7 +68,7 @@ void FSettingsPanel::OnRender()
 	ImGui::SetNextItemWidth(200.0f);
 	if (ImGui::Combo("Lighting Model", &LightingModelIndex, LightingModels, IM_ARRAYSIZE(LightingModels)))
 		Settings.LightingModel = static_cast<ELightingModel>(LightingModelIndex);
-	const char* LightCullingModes[] = { "Off", "Tiled", "Clustered" };
+	const char* LightCullingModes[] = { "Off", "Tiled", "Clustered", "Tiled 2.5D" };
 	int LightCullingModeIndex = static_cast<int>(Settings.LightCullingMode);
 	ImGui::SetNextItemWidth(200.0f);
 	if (ImGui::Combo("Light Culling", &LightCullingModeIndex,
@@ -216,7 +217,7 @@ bool FSettingsPanel::SaveSettings() const
 	File << "ShowCameraOverlay=" << Settings.bShowCameraOverlay << "\n";
 	File << "ShowSkeletalMesh=" << Settings.bShowSkeletalMesh << "\n";
 
-	File << "LightCullingMode=" << (Settings.LightCullingMode == ELightCullingMode::Off ? "Off" : Settings.LightCullingMode == ELightCullingMode::Tiled ? "Tiled" : "Clustered") << "\n";
+	File << "LightCullingMode=" << (Settings.LightCullingMode == ELightCullingMode::Off ? "Off" : Settings.LightCullingMode == ELightCullingMode::Tiled ? "Tiled" : Settings.LightCullingMode == ELightCullingMode::Tiled25D ? "Tiled25D" : "Clustered") << "\n";
 	File << "RenderingPath=" << (Settings.RenderingPath == ERenderingPath::Forward ? "Forward" : "Deferred") << "\n";
 	File << "LightingModel=" << (Settings.LightingModel == ELightingModel::Gouraud ? "Gouraud" :
 		Settings.LightingModel == ELightingModel::Lambert ? "Lambert" :
@@ -377,6 +378,7 @@ bool FSettingsPanel::LoadSettings()
 					if (ValueStr == "Off") Settings.LightCullingMode = ELightCullingMode::Off;
 					else if (ValueStr == "Tiled") Settings.LightCullingMode = ELightCullingMode::Tiled;
 					else if (ValueStr == "Clustered") Settings.LightCullingMode = ELightCullingMode::Clustered;
+					else if (ValueStr == "Tiled25D") Settings.LightCullingMode = ELightCullingMode::Tiled25D;
 				}
 				else if (Key == "EnableTiledLightCulling" || Key == "EnableClusteredLightCulling")
 				{
@@ -551,6 +553,22 @@ void FSettingsPanel::DrawDefaultPawnSettings()
                 }
                 if (bSelected) ImGui::SetItemDefaultFocus();
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", Mesh->GetPath().c_str());
+                ImGui::PopID();
+            }
+
+            // 아직 로드되지 않은 메시는 경로만 보여 주고 고를 때 로드한다
+            for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::StaticMesh))
+            {
+                ImGui::PushID(ItemPath.c_str());
+                if (ImGui::Selectable(fs::path(ItemPath).stem().string().c_str(), false))
+                {
+                    if (UStaticMesh* Mesh = UAssetManager::GetAssetByPath<UStaticMesh>(ItemPath))
+                    {
+                        SelectedMesh = Mesh;
+                        bChanged = true;
+                    }
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ItemPath.c_str());
                 ImGui::PopID();
             }
             ImGui::EndCombo();

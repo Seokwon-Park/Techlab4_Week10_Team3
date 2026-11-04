@@ -47,6 +47,7 @@ void FSkeletalMeshSceneProxy::GetDynamicMeshElements(FRenderQueue& Queue, const 
 		Packet.Proxy = this;
 		Packet.VertexBuffer = VB;
 		Packet.IndexBuffer = IB;
+		Packet.BoneBuffer = Object->GetBoneMatrixBuffer();
 		Packet.Material = Section.Material;
 		Packet.StartIndex = Section.StartIndex;
 		Packet.IndexCount = Section.IndexCount;
