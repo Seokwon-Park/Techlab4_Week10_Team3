@@ -1,6 +1,38 @@
 #include "EnginePCH.h"
 #include "OBBTree.h"
 
+namespace
+{
+	// 한 메시의 노드는 전부 같은 축(메시의 월드 축)에 정렬돼 있다.
+	// 그래서 SAT 후보 축 15개와 데칼 쪽 값은 노드마다 다시 구할 필요가 없다.
+	// 노드마다 달라지는 건 중심과 반지름뿐이라, 그 둘만 남겨 둔다.
+	struct FSeparatingAxes
+	{
+		static constexpr int32 MaxAxes = 15;
+
+		FVector Axis[MaxAxes];
+		float DecalRadius[MaxAxes];		// 축에 투영한 데칼의 반지름
+		float DecalCenter[MaxAxes];		// 축에 투영한 데칼의 중심
+		FVector NodeScaledDot[MaxAxes];	// |메시 축 · 축| × 스케일. 노드 반지름에 그대로 곱한다
+		int32 Count = 0;
+
+		void Add(const FVector& L, const FOBB& Decal, const FVector* NodeAxis, const float* Scale)
+		{
+			if (Count >= MaxAxes) return;
+			if (L.SizeSquared() < 1e-6f) return;	// 평행하면 영벡터라 분리를 못 찾는다
+
+			Axis[Count] = L;
+			DecalRadius[Count] = GetProjectedRadius(Decal, L);
+			DecalCenter[Count] = Decal.Center | L;
+			NodeScaledDot[Count] = FVector(
+				std::abs(NodeAxis[0] | L) * Scale[0],
+				std::abs(NodeAxis[1] | L) * Scale[1],
+				std::abs(NodeAxis[2] | L) * Scale[2]);
+			++Count;
+		}
+	};
+}
+
 void FOBBTree::Build(const TArray<FVector>& Positions, const TArray<uint32>& Indices)
 {
 	TriangleBounds.Reset();
@@ -30,6 +62,7 @@ void FOBBTree::Build(const TArray<FVector>& Positions, const TArray<uint32>& Ind
 		Triangles.Add(index);
 	}
 
+	Stack.Reserve(MaxDepth * 2 + 2);	// 질의용 스택을 미리 잡아 둔다
 	BuildNode(0, static_cast<uint32> (Triangles.Num()), 0);
 }
 
@@ -45,32 +78,46 @@ bool FOBBTree::Intersects(const FOBB& DecalWorld, const FMatrix& LocalToWorld) c
 		Axis[i] = Row / Scale[i];
 	}
 
-	TArray<int32> OBBStack;
-	OBBStack.Add(0);
-	while (!OBBStack.IsEmpty()) {
-		const int32 nodeIndex = OBBStack.Last();
-		OBBStack.RemoveLast();
+	// 후보 축 15개를 메시당 한 번만 구한다 (노드마다 다시 구하지 않는다)
+	FSeparatingAxes Axes;
+	for (int32 i = 0; i < 3; i++) Axes.Add(DecalWorld.Axis[i], DecalWorld, Axis, Scale);
+	for (int32 i = 0; i < 3; i++) Axes.Add(Axis[i], DecalWorld, Axis, Scale);
+	for (int32 i = 0; i < 3; i++) {
+		for (int32 j = 0; j < 3; j++) {
+			Axes.Add(DecalWorld.Axis[i] ^ Axis[j], DecalWorld, Axis, Scale);
+		}
+	}
 
-		// Local to World 
-		FBox LocalBounds = Nodes[nodeIndex].LocalBounds;
+	Stack.Reset();
+	Stack.Add(0);
+	while (!Stack.IsEmpty()) {
+		const int32 nodeIndex = Stack.Last();
+		Stack.RemoveLast();
+
+		const FBox& LocalBounds = Nodes[nodeIndex].LocalBounds;
 		const FVector LocalCenter = (LocalBounds.Min + LocalBounds.Max) * 0.5f;
 		const FVector LocalExtent = (LocalBounds.Max - LocalBounds.Min) * 0.5f;
 
-		FOBB WorldOBB;
+		// 노드마다 바뀌는 건 중심뿐이다. 월드로 한 번 옮긴다
 		const FVector4 C = FVector4(LocalCenter, 1.0f) * LocalToWorld;
-		WorldOBB.Center = FVector(C.X, C.Y, C.Z);
-		for (int32 i = 0; i < 3; i++) {
-			WorldOBB.Axis[i] = Axis[i];
-		}
-		WorldOBB.Extent = { LocalExtent.X * Scale[0], LocalExtent.Y * Scale[1], LocalExtent.Z * Scale[2] };
+		const FVector WorldCenter(C.X, C.Y, C.Z);
 
-		
-		if (!IntersectOBBOBB(DecalWorld, WorldOBB)) continue;	// 겹치지 않으면 Pruning
+		// SAT: 한 축이라도 분리되면 겹치지 않는다
+		bool bSeparated = false;
+		for (int32 k = 0; k < Axes.Count; k++) {
+			const float NodeRadius = LocalExtent | Axes.NodeScaledDot[k];
+			const float Distance = std::abs((WorldCenter | Axes.Axis[k]) - Axes.DecalCenter[k]);
+			if (Distance > Axes.DecalRadius[k] + NodeRadius) {
+				bSeparated = true;
+				break;
+			}
+		}
+		if (bSeparated) continue;				// 겹치지 않으면 Pruning
 		if (Nodes[nodeIndex].IsLeaf()) return true;		// 찾음
 
 		// 더 내려가기
-		OBBStack.Add(Nodes[nodeIndex].Left);
-		OBBStack.Add(Nodes[nodeIndex].Right);
+		Stack.Add(Nodes[nodeIndex].Left);
+		Stack.Add(Nodes[nodeIndex].Right);
 	}
 
 	return false;

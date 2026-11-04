@@ -32,4 +32,7 @@ private:
 
 	TArray<FBox> TriangleBounds;
 	TArray<FVector> Centroids;	// 삼각형 무게중심 모음
+
+	// 질의마다 새로 할당하지 않도록 멤버로 둔다 (TBVH의 QueryStack과 같은 방식)
+	mutable TArray<int32> Stack;
 };
