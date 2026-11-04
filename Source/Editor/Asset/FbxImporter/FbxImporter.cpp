@@ -3,6 +3,7 @@
 #include "Asset/AssetManager.h"
 
 #include <array>
+#include <fstream>
 
 namespace
 {
@@ -35,7 +36,8 @@ namespace
 			auto* Skin = static_cast<FbxSkin*>(Mesh->GetDeformer(S, FbxDeformer::eSkin));
 			if (Skin->GetSkinningType() == FbxSkin::eDualQuaternion || Skin->GetSkinningType() == FbxSkin::eBlend)
 			{
-				// TODO: Dual Quaternion/Blend 고유 변형 지원. 출력 Weight는 Linear Skinning에 사용한다.
+				// TODO: 현재는 Dual Quaternion/Blend도 Linear Skinning으로 처리하여 원본의 변형 방식을 보존하지 못한다.
+				// 해당 변형 방식에 필요한 데이터를 출력에 보존하고, 런타임 Skinning도 이를 사용하도록 확장해야 한다.
 				Warnings.Add("FBX: Dual Quaternion/Blend skin imported as Linear: " + FString(Node->GetName()));
 			}
 			for (int C = 0; C < Skin->GetClusterCount(); ++C)
@@ -71,7 +73,8 @@ namespace
 			for (const auto& Influence : Influences[CP]) Sorted.Add({ Influence.first, Influence.second });
 			if (Sorted.IsEmpty())
 			{
-				// TODO: Influence 없는 Control Point의 대체 정책 지원. 임의 Bone에 귀속하지 않는다.
+				// TODO: 현재는 양수 Weight가 없는 Control Point가 하나라도 있으면 Import 전체가 실패한다.
+				// 이런 정점의 처리 정책을 먼저 정하고, 임의 Bone에 귀속하지 않으면서 Import를 계속할 대체 처리를 추가해야 한다.
 				Error = "FBX: Control Point has no positive influence: " + FString(Node->GetName()) + " [" + std::to_string(CP) + "]";
 				return false;
 			}
@@ -219,7 +222,61 @@ namespace
 		return true;
 	}
 
-	// Material의 지정 속성에 연결된 첫 File Texture를 찾아 원본 파일의 절대 경로를 반환한다.
+	// SDK 기본 추출은 동일 파일명의 공유 Texture 경로를 잘못 연결할 수 있어 원본 전체 경로로 대응시킨다.
+	// Open 중에만 사용하는 상태다. 추출 파일의 수명은 호출자가 관리하는 작업 폴더를 따른다.
+	struct FEmbeddedExtraction
+	{
+		std::filesystem::path Folder;
+		TMap<FString, FString> Files;
+		FString Error;
+
+		static FString Key(const char* Name)
+		{
+			const auto Text = PathOf(Name).lexically_normal().generic_u8string();
+			return FString(Text.begin(), Text.end());
+		}
+
+		static FbxCallback::State Read(void* User, FbxClassId Hint, const char* Name, const void* Data, size_t Size)
+		{
+			// 현재 Import 대상은 이미지다. 다른 Embedded media는 디스크에 추출하지 않는다.
+			if (Hint != FbxVideo::ClassId) return FbxCallback::eHandled;
+			auto& State = *static_cast<FEmbeddedExtraction*>(User);
+			if (!State.Error.empty()) return FbxCallback::eFailure;
+			try
+			{
+				if (!Name || !*Name || !Data || !Size) { State.Error = "FBX: empty embedded texture"; return FbxCallback::eFailure; }
+				const FString Original = Key(Name);
+				if (State.Files.Contains(Original)) return FbxCallback::eHandled;
+				// 서로 다른 폴더의 동일 파일명도 보존하며, 원본 경로를 추출 대상 경로로 사용하지 않는다.
+				const auto Directory = State.Folder / std::to_string(State.Files.Num());
+				std::filesystem::create_directory(Directory);
+				const auto Target = Directory / PathOf(Name).filename();
+				std::ofstream File(Target, std::ios::binary | std::ios::trunc);
+				File.write(static_cast<const char*>(Data), static_cast<std::streamsize>(Size));
+				File.close();
+				if (!File) { State.Error = "FBX: cannot extract embedded texture: " + Original; return FbxCallback::eFailure; }
+				const auto Text = Target.generic_u8string();
+				State.Files.Add(Original, FString(Text.begin(), Text.end()));
+				return FbxCallback::eHandled;
+			}
+			catch (const std::exception& Exception)
+			{
+				State.Error = "FBX: embedded texture extraction failed: " + FString(Exception.what());
+				return FbxCallback::eFailure;
+			}
+		}
+
+		void ResolveTextures(FbxScene* Scene) const
+		{
+			for (int I = 0; I < Scene->GetSrcObjectCount<FbxFileTexture>(); ++I)
+			{
+				FbxFileTexture* Texture = Scene->GetSrcObject<FbxFileTexture>(I);
+				if (const FString* Extracted = Files.Find(Key(Texture->GetFileName()))) Texture->SetFileName(Extracted->c_str());
+			}
+		}
+	};
+
+	// Material의 지정 속성에 연결된 첫 File Texture를 찾아 원본 또는 추출 파일의 절대 경로를 반환한다.
 	// 절대 경로 → FBX 폴더+상대 경로 → FBX 폴더+파일명 순으로 탐색하며, 파일 복사/이미지 로딩은 하지 않는다.
 	// 연결이 없으면 빈 경로를 반환하고, 파일 누락이나 지원하지 않는 Texture 방식은 경고로 알린다.
 	FString ReadTexture(FbxSurfaceMaterial* Material, const char* PropertyName, const std::filesystem::path& Folder, const char* UVName, TArray<FString>& Warnings)
@@ -251,8 +308,7 @@ namespace
 			const auto Text = Absolute.lexically_normal().generic_u8string();
 			return FString(Text.begin(), Text.end());
 		}
-		// TODO: Embedded Texture 추출 지원. 원본 파일만 찾는다.
-		Warn(Warnings, "Texture file not found (embedded-only texture is unsupported): " + FString(Material->GetName()) + "/" + PropertyName + " : " + Texture->GetFileName());
+		Warn(Warnings, "Texture file not found: " + FString(Material->GetName()) + "/" + PropertyName + " : " + Texture->GetFileName());
 		return {};
 	}
 
@@ -412,7 +468,7 @@ FFbxImporter::~FFbxImporter()
 	Close();
 }
 
-bool FFbxImporter::Open(const FString& Path, FString& OutError)
+bool FFbxImporter::Open(const FString& Path, FString& OutError, const FString& ExtractionFolder)
 {
 	Close();
 	OutError.clear();
@@ -434,9 +490,8 @@ bool FFbxImporter::Open(const FString& Path, FString& OutError)
 	Manager->SetIOSettings(Settings);
 
 
-	// TODO: 아직은 embedded data에 대한 처리를 하지 않는다.
-	// Open은 Scene 읽기까지 담당하며, 파일 안의 Texture를 디스크에 추출하지 않는다.
-	Settings->SetBoolProp(IMP_FBX_EXTRACT_EMBEDDED_DATA, false);
+	// Asset Import는 호출자가 관리하는 임시 폴더로 추출한다. 폴더 없는 Scene 조회는 디스크에 쓰지 않는다.
+	Settings->SetBoolProp(IMP_FBX_EXTRACT_EMBEDDED_DATA, !ExtractionFolder.empty());
 
 	Scene = FbxScene::Create(Manager, "ImportScene");
 	// importer에 이름을 지정하면, 이름을 기반으로 로그를 남길 때 유용하게 사용할 수 있지만
@@ -461,12 +516,36 @@ bool FFbxImporter::Open(const FString& Path, FString& OutError)
 		Close();
 		return false;
 	}
-	if (!Reader->Import(Scene))
+	FEmbeddedExtraction Extraction;
+	FbxEmbeddedFileCallback* Callback = nullptr;
+	if (!ExtractionFolder.empty())
 	{
-		OutError = "FBX: cannot import '" + Path + "': " + Reader->GetStatus().GetErrorString();
+		Extraction.Folder = PathOf(ExtractionFolder);
+		Reader->SetEmbeddingExtractionFolder(ExtractionFolder.c_str());
+		Callback = FbxEmbeddedFileCallback::Create(Manager, "EmbeddedTextures");
+		if (!Callback || Callback->RegisterReadFunction(FEmbeddedExtraction::Read, &Extraction) < 0)
+		{
+			OutError = "FBX: cannot create embedded texture callback";
+			Close();
+			return false;
+		}
+		// Initialize가 callback을 초기화하므로 Initialize 이후, Import 이전에 등록한다.
+		Reader->SetEmbeddedFileReadCallback(Callback);
+	}
+	const bool Imported = Reader->Import(Scene);
+	// callback의 지역 상태를 가리키는 포인터가 Open 반환 뒤에 남지 않도록 해제한다.
+	if (Callback)
+	{
+		Reader->SetEmbeddedFileReadCallback(nullptr);
+		Callback->Destroy();
+	}
+	if (!Imported || !Extraction.Error.empty())
+	{
+		OutError = Extraction.Error.empty() ? "FBX: cannot import '" + Path + "': " + Reader->GetStatus().GetErrorString() : Extraction.Error;
 		Close();
 		return false;
 	}
+	Extraction.ResolveTextures(Scene);
 
 	// Creator는 Reader가 살아 있을 때 읽어 두고 Blender Armature 예외 판별에 사용한다.
 	const FbxIOFileHeaderInfo* Header = Reader->GetFileHeaderInfo();
@@ -837,7 +916,8 @@ namespace
 			const FString Key = std::filesystem::relative(PathOf(Path), "Assets").generic_string();
 			if (bChanged && UAssetManager::FindLoadedAsset(Key))
 			{
-				// TODO: 실행 중 로드된 Asset과 참조 중인 Material/Texture의 안전한 교체.
+				// TODO: 현재는 재Import로 파일을 갱신해도 이미 로드된 Asset은 유지되어 변경 내용을 사용하려면 엔진을 재시작해야 한다.
+				// Asset을 참조하는 Component와 렌더 자원의 수명을 고려해 Mesh/Material/Texture를 안전하게 갱신해야 한다.
 				Warnings.Add("FBX: asset already loaded; restart the engine to use updated files: " + Key);
 			}
 			if (!UAssetManager::LoadFbxMesh(Path, Error))
@@ -905,7 +985,8 @@ bool FFbxImporter::ImportToAssets(const FString& Path, EFbxImportMode Mode, FFbx
 			}
 			if (Complete)
 			{
-				// TODO: 원본 FBX가 같고 외부 Texture만 변경된 경우도 감지한다.
+				// TODO: 현재는 FBX 원본만 비교하므로 외부 Texture만 변경되면 Import를 건너뛰어 변경 내용이 반영되지 않는다.
+				// 참조하는 외부 Texture의 변경 정보도 저장·비교하여 이미지가 바뀐 경우 재Import하도록 해야 한다.
 				OutResult.bSkipped = true;
 				OutResult.Paths = std::move(Paths);
 				HTR_LOG(Info, "FBX Import skipped (source unchanged): {}", Source.Path);
@@ -913,8 +994,16 @@ bool FFbxImporter::ImportToAssets(const FString& Path, EFbxImportMode Mode, FFbx
 			}
 		}
 
+		// SDK 추출부터 최종 파일 교체까지 같은 작업 폴더를 유지한다. 실패 시에도 소멸자가 정리한다.
+		std::filesystem::create_directories(Folder / "Textures");
+		FImportFiles Staged;
+		const auto Temporary = Folder / (".import-" + std::to_string(GetCurrentProcessId()) + "-" + std::to_string(GetTickCount64()));
+		if (!std::filesystem::create_directory(Temporary)) { OutError = "FBX: temporary directory already exists"; return false; }
+		Staged.Folder = Temporary;
+		const auto Extraction = std::filesystem::absolute(Temporary / "embedded");
+		std::filesystem::create_directory(Extraction);
 		FFbxImporter Importer;
-		if (!Importer.Open(Source.Path, OutError)) return false;
+		if (!Importer.Open(Source.Path, OutError, Utf8Path(Extraction))) return false;
 		TArray<FString> Warnings;
 		if (!Importer.ReadMeshData(Warnings, OutError)) { OutResult.Warnings.Append(Warnings); return false; }
 		OutResult.Warnings.Append(Warnings);
@@ -937,14 +1026,10 @@ bool FFbxImporter::ImportToAssets(const FString& Path, EFbxImportMode Mode, FFbx
 			if (!Static.StaticMesh.Validate(OutError)) return false;
 			Outputs.Add(std::move(Static));
 		}
+		// Scene을 닫아도 추출 파일은 Staged가 소유하므로 아래 Texture 복사까지 살아 있다.
 		Importer.Close();
 		if (Outputs.IsEmpty()) { OutError = "FBX: no mesh output"; return false; }
 		for (const auto& Output : Outputs) Source.Outputs |= static_cast<uint32>(Output.Kind);
-		std::filesystem::create_directories(Folder / "Textures");
-		FImportFiles Staged;
-		const auto Temporary = Folder / (".import-" + std::to_string(GetCurrentProcessId()) + "-" + std::to_string(GetTickCount64()));
-		if (!std::filesystem::create_directory(Temporary)) { OutError = "FBX: temporary directory already exists"; return false; }
-		Staged.Folder = Temporary;
 		TMap<FString, FString> Copied;
 		TSet<FString> Names;
 		for (auto& Output : Outputs)

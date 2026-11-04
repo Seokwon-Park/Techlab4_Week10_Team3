@@ -32,7 +32,8 @@ public:
 	FFbxImporter& operator=(const FFbxImporter&) = delete;
 
 	// 이전 Scene을 닫고 새 파일을 읽는다. 실패하면 닫힌 상태와 오류를 반환한다.
-	bool Open(const FString& Path, FString& OutError);
+	// 추출 폴더를 지정하면 Embedded Texture를 추출한다. 폴더는 호출자가 소유하며 Texture 복사가 끝난 뒤 정리한다.
+	bool Open(const FString& Path, FString& OutError, const FString& ExtractionFolder = {});
 	void Close();
 	// 비소유 참조. 다음 Open/Close 또는 이 객체의 소멸 전까지만 유효하다.
 	FbxScene* GetScene() const { return Scene; }
