@@ -1037,6 +1037,12 @@ void UEditorEngine::RenderAssetEditor(FAssetEditor& AssetEditor)
 				LineBatcher->BeginFrame();
 				AssetEditor.OnRenderLine(*LineBatcher);
 				LineBatcher->OnRender(View.ViewProjectionMatrix);
+
+				if (const FGizmo* PreviewGizmo = AssetEditor.GetPreviewGizmo())
+				{
+					GizmoRenderer->OnRender(*PreviewGizmo, View.ViewProjectionMatrix,
+						View.ViewLocation, !View.bIsPerspective);
+				}
 			};
 		});
 }

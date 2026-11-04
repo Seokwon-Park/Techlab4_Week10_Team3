@@ -83,7 +83,7 @@ AActor* FPreviewScene::AddActor(UClass* ActorClass)
 		return nullptr;
 	}
 
-	AActor* Actor = World->SpawnActor(ActorClass, "Preview Actor");
+	AActor* Actor = World->SpawnActor(ActorClass);
 	if (!Actor)
 	{
 		return nullptr;

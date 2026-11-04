@@ -1,6 +1,7 @@
 #pragma once
 
 #include "Editor/AssetEditor/AssetEditor.h"
+#include "Editor/Gizmo/Gizmo.h"
 #include "Editor/Viewports/EditorViewportClient.h"
 #include "Camera/ViewportCameraMovement.h"
 
@@ -14,6 +15,17 @@ struct FEditorBoneItem
 
 	// BindPose 행렬의 역행렬. Gizmo 그릴 때 사용
 	FMatrix InverseBindPose;
+};
+
+struct FBoneGizmoInput
+{
+	// 이미지 크기에 대한 비율로 저장하여 분리 창과 렌더 타깃의 좌표를 일치시킵니다.
+	FVector2 MouseUV = FVector2(0.0f, 0.0f);
+	bool bHovered = false;
+	bool bFocused = false;
+	bool bMousePressed = false;
+	bool bMouseDown = false;
+	bool bCancel = false;
 };
 
 class FSkeletalMeshEditor : public FAssetEditor
@@ -59,8 +71,15 @@ public:
 	// 본의 상태를 초기화합니다.
 	void ResetBone(int32 BoneIndex);
 
+	// 본 시각화의 표시 여부를 설정합니다.
+	void SetBoneVisualizerVisible(bool bVisible) { bShowBoneVisualizer = bVisible; }
+
 	// 뷰포트 상태를 설정합니다. (뷰포트가 보이지 않으면 입력을 무시합니다)
-	void SetViewportState(uint32 Width, uint32 Height, const FViewportCameraInput& Input);
+	void SetViewportState(uint32 Width, uint32 Height, const FViewportCameraInput& Input,
+		const FBoneGizmoInput& InGizmoInput = {});
+
+	void SetGizmoMode(EGizmoMode Mode);
+	void SetGizmoSpace(EGizmoSpace Space);
 
 
 	////////////////////////////////////////////////////////////
@@ -69,10 +88,15 @@ public:
 
 	const char* GetEditorTypeName() const override { return "SkeletalMesh"; }
 	USkeletalMesh* GetMesh() const { return Mesh; }
+	const FGizmo* GetPreviewGizmo() const override { return BoneGizmo.GetTarget() ? &BoneGizmo : nullptr; }
+	EGizmoMode GetGizmoMode() const { return BoneGizmo.GetMode(); }
+	EGizmoSpace GetGizmoSpace() const { return BoneGizmo.GetSpace(); }
+	bool IsGizmoDragging() const { return BoneGizmo.IsUsing(); }
 
 	const TArray<int32>& GetRootBoneIndices() const { return RootBoneIndices; }
 	const TArray<FEditorBoneItem>& GetBoneItems() const { return BoneItems; }
 	int32 GetSelectedBoneIndex() const { return SelectedBoneIndex; }
+	bool IsBoneVisualizerVisible() const { return bShowBoneVisualizer; }
 
 protected:
 	// 이 에디터에 연결된 탭을 생성합니다.
@@ -88,8 +112,20 @@ protected:
 	void BuildBoneItems();
 
 private:
+	// 현재 포즈의 본 월드 변환을 Gizmo 대상에 반영합니다.
+	void SyncBoneGizmo();
+	void UpdateBoneGizmo();
+	void ApplyBoneGizmoTransform();
+	FQuat GetBoneWorldRotation(int32 BoneIndex) const;
+
 	class USkeletalMesh* Mesh = nullptr;
 	class USkeletalMeshComponent* MeshComponent = nullptr;
+	USceneComponent* BoneGizmoTarget = nullptr;
+	FGizmo BoneGizmo;
+	FBoneGizmoInput GizmoInput;
+	FTransform DragStartBoneTransform;
+	FMatrix DragParentInverse;
+	FQuat DragParentRotation;
 
 	FViewportCameraInput CameraInput;
 
@@ -100,6 +136,10 @@ private:
 	TArray<int32> RootBoneIndices;
 	int32 SelectedBoneIndex = -1;
 
+	FBox MeshBox;
+	float BoneSphereSize = 0.0f;
+
+	bool bShowBoneVisualizer = true;
 	bool bViewportVisible = false;
 	bool bInitialFocusPending = true;
 };

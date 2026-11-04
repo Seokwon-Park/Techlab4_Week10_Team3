@@ -19,10 +19,14 @@ void FBoneHierarchyPanel::DrawContent()
 
 	if (ImGui::BeginChild("BoneHierarchyChild", ImVec2(0, 0), false, ImGuiWindowFlags_HorizontalScrollbar))
 	{
+		ImGui::PushStyleVar(ImGuiStyleVar_IndentSpacing, 12.0f);
+
 		for (int32 RootBoneIndex : Editor.GetRootBoneIndices())
 		{
 			DrawBoneHierarchy(RootBoneIndex);
 		}
+
+		ImGui::PopStyleVar();
 	}
 
 	ImGui::EndChild();

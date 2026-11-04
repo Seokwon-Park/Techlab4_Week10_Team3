@@ -14,6 +14,12 @@ void FSkeletalMeshSettingsPanel::DrawContent()
 		Editor.ResetPose();
 	}
 
+	bool bShowBoneVisualizer = Editor.IsBoneVisualizerVisible();
+	if (ImGui::Checkbox("Show Bone Visualizer", &bShowBoneVisualizer))
+	{
+		Editor.SetBoneVisualizerVisible(bShowBoneVisualizer);
+	}
+
 	if (FEditorViewportClient* Client = Editor.GetViewportClient())
 	{
 		bool bWireframe = Client->IsWireframe();

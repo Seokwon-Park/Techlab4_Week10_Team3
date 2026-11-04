@@ -9,6 +9,13 @@ FSkeletalMeshViewportPanel::FSkeletalMeshViewportPanel(FSkeletalMeshEditor& InEd
 
 void FSkeletalMeshViewportPanel::DrawContent()
 {
+	int32 Mode = static_cast<int32>(Editor.GetGizmoMode());
+	ImGui::SetNextItemWidth(300.0f);
+	if (ImGui::Combo("##GizmoMode", &Mode, "Move\0Rotate\0Scale\0"))
+	{
+		Editor.SetGizmoMode(static_cast<EGizmoMode>(Mode));
+	}
+
 	FEditorViewportClient* Client = Editor.GetViewportClient();
 	const ImVec2 Size = ImGui::GetContentRegionAvail();
 	if (!Client || Size.x < 1.0f || Size.y < 1.0f)
@@ -47,10 +54,22 @@ void FSkeletalMeshViewportPanel::DrawContent()
 	// ImGui가 생성하는 HWND에 직접 WndProc을 연결하고 FInputSystem에 전달시켜야함
 
 	const ImGuiIO& IO = ImGui::GetIO();
+	const bool bMouseDown = ImGui::IsMouseDown(ImGuiMouseButton_Left);
+	const bool bCameraDragging = ImGui::IsMouseDown(ImGuiMouseButton_Right);
+	const FBoneGizmoInput GizmoInput
+	{
+		.MouseUV = FVector2((IO.MousePos.x - Origin.x) / Size.x, (IO.MousePos.y - Origin.y) / Size.y),
+		.bHovered = bHovered,
+		.bFocused = bFocused && !IO.AppFocusLost,
+		.bMousePressed = bHovered && !bCameraDragging && ImGui::IsMouseClicked(ImGuiMouseButton_Left),
+		.bMouseDown = bMouseDown,
+		.bCancel = ImGui::IsKeyPressed(ImGuiKey_Escape, false),
+	};
+
 	FViewportCameraInput Input
 	{
-		.bCaptured		= bFocused && ImGui::IsItemActive() && ImGui::IsMouseDown(ImGuiMouseButton_Right),
-		.bAllowWheel	= bHovered,
+		.bCaptured		= bFocused && ImGui::IsItemActive() && bCameraDragging && !bMouseDown && !Editor.IsGizmoDragging(),
+		.bAllowWheel	= bHovered && !bMouseDown && !Editor.IsGizmoDragging(),
 		.bForward		= ImGui::IsKeyDown(ImGuiKey_W),
 		.bBackward		= ImGui::IsKeyDown(ImGuiKey_S),
 		.bRight			= ImGui::IsKeyDown(ImGuiKey_D),
@@ -64,8 +83,25 @@ void FSkeletalMeshViewportPanel::DrawContent()
 		.Wheel			= IO.MouseWheel * 120.0f,
 	};
 
+	// 키보드로 Gizmo 키 변경
+	if (!bCameraDragging)
+	{
+		if (ImGui::IsKeyDown(ImGuiKey_W))
+		{
+			Editor.SetGizmoMode(EGizmoMode::Location);
+		}
+		if (ImGui::IsKeyDown(ImGuiKey_E))
+		{
+			Editor.SetGizmoMode(EGizmoMode::Rotation);
+		}
+		if (ImGui::IsKeyDown(ImGuiKey_R))
+		{
+			Editor.SetGizmoMode(EGizmoMode::Scale);
+		}
+	}
+
 	// 렌더 타깃 변경은 Editor의 다음 Render에서 수행합니다.
 	uint32 Width = static_cast<uint32>(Size.x);
 	uint32 Height = static_cast<uint32>(Size.y);
-	Editor.SetViewportState(Width, Height, Input);
+	Editor.SetViewportState(Width, Height, Input, GizmoInput);
 }

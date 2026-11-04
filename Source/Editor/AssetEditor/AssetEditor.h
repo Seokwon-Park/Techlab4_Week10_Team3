@@ -5,6 +5,7 @@
 #include "Editor/AssetEditor/FPreviewScene.h"
 
 class FEditorViewportClient;
+class FGizmo;
 
 class FAssetEditor
 {
@@ -49,6 +50,7 @@ public:
 	const FString& GetAssetPath() const { return AssetPath; }
 	FPreviewScene& GetPreviewScene() { return PreviewScene; }
 	FEditorViewportClient* GetViewportClient() const { return ViewportClient.get(); }
+	virtual const FGizmo* GetPreviewGizmo() const { return nullptr; }
 
 	bool IsCloseRequested() const { return bCloseRequested; }
 
