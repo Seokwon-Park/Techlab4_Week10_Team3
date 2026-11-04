@@ -646,7 +646,9 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					if (!bCorePassSucceeded || ForwardBatches.IsEmpty()) return;
 
 					FPipelineState* DecalPipeline = FRenderResourceManager::GetPSO(EPSOType::Decal);
+					FPipelineState* DecalAdditivePipeline = FRenderResourceManager::GetPSO(EPSOType::DecalAdditive);
 					if (!DecalPipeline || !DecalPipeline->Shader) return;
+					if (!DecalAdditivePipeline || !DecalAdditivePipeline->Shader) return;
 
 					FConstantBuffer* Constants = Renderer->GetDecalConstants();
 					TArray<FMeshDrawBatch> DecalBatches;
@@ -672,7 +674,6 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 						DecalHeaders.Add(Src);
 						FMeshDrawBatch& Header = DecalHeaders.Last();
 						Header.Items.Reset();
-						Header.Pipeline = *DecalPipeline;
 						Header.Sampler = ESamplerState::LinearClamp;
 
 						for (uint32 ItemIndex = 0; ItemIndex < static_cast<uint32>(Src.Items.Num()); ItemIndex++)
@@ -691,6 +692,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 
 						Decal->SetDecalViewProj();
 						Data.Fade = Decal->GetFade();
+						Data.bAdditive = Decal->IsAdditive() ? 1.0f : 0.0f;
 						Data.VP = Decal->GetDecalVP();
 
 						RenderCommand::UpdateBufferData(Constants, &Data, sizeof(Data));
@@ -753,6 +755,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 
 						for (uint32 BatchIndex : TouchedBatches) {
 							FMeshDrawBatch& Header = DecalHeaders[BatchIndex];
+							Header.Pipeline = Decal->IsAdditive() ? *DecalAdditivePipeline : *DecalPipeline;
 							Header.Textures = { { Decal->GetDecalTexture(), EShaderBindFlagBits::Pixel } };
 							ReceiverItems += Header.Items.Num();
 							DecalBatches.Add(std::move(Header));

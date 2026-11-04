@@ -4,7 +4,8 @@ struct alignas(16) FDecalData
 {
 	FMatrix VP;
 	float Fade;
-	float Padding[3];
+	float bAdditive;
+	float Padding[2];
 };
 
 static_assert(sizeof(FDecalData) == 80);

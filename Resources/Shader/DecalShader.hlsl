@@ -11,7 +11,8 @@ cbuffer DecalConstants : register(b1)
 {
     matrix DecalVP;
     float Fade;
-    float3 Padding;
+    float bAdditive;
+    float2 Padding;
 }
 
 Texture2D DecalTexture : register(t0);
@@ -58,6 +59,11 @@ float4 mainPS(VS_OUT Input) : SV_Target
     
     float4 color = DecalTexture.Sample(DecalSampler, float2(u, v));
     color.a *= Fade;
+    
+    if (bAdditive > 0.5)
+    {
+        color.rgb *= color.a;
+    }
     
     return color; 
 }

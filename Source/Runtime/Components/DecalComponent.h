@@ -35,6 +35,8 @@ public:
 	void GetWorldCorners(FVector OutCorners[8]) const;
 	void DrawDebug(class FLineBatcher* LineBatcher) const;
 
+	bool IsAdditive() const { return bAdditive; }
+
 protected:
 	virtual bool ShouldCreateRenderState() const override
 	{
@@ -54,7 +56,7 @@ private:
 	UPROPERTY(EditAnywhere) int32 SortOrder = 0;
 
 	UPROPERTY(EditAnywhere) bool bPerspective = false;
-	UPROPERTY(EditAnywhere) float FovDegrees = 60.0f;
+	UPROPERTY(EditAnywhere) bool bAdditive = false;
 
 	FMatrix DecalViewProj;
 
