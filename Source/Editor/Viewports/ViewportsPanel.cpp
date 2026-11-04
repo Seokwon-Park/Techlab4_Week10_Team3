@@ -479,6 +479,7 @@ const FRenderStats& Stats = RenderData.RenderStats;
 		Lines.Add({ std::format("  Decal Broad Tested {}", Stats.DecalBroadTests), ValueColor });
 		Lines.Add({ std::format("  Decal Narrow Tested {}", Stats.DecalNarrowTested), ValueColor });
 		Lines.Add({ std::format("  Decal OBBTree Tested {}", Stats.DecalOBBTreeTested), ValueColor });
+		Lines.Add({ std::format("  Decal GPU {:.3f} ms", Stats.DecalGPUMs), ValueColor });
 	}
 
 	if (Lines.Num() == 0 && ProfileLines.Num() == 0)

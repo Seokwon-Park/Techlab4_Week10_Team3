@@ -655,6 +655,10 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					if (!DecalPipeline || !DecalPipeline->Shader) return;
 					if (!DecalAdditivePipeline || !DecalAdditivePipeline->Shader) return;
 
+					// 여기부터 패스 끝까지가 GPU 측정 구간이다. 위의 조기 return은 잴 것이 없으므로 제외한다.
+					FScopedGPUTimer DecalGPUScope(RenderData.DecalGPUTimer);
+					RenderData.RenderStats.DecalGPUMs = RenderData.DecalGPUTimer.GetLastMs();
+
 					FConstantBuffer* Constants = Renderer->GetDecalConstants();
 					TArray<FMeshDrawBatch> DecalBatches;
 					DecalBatches.Reserve(ForwardBatches.Num());
