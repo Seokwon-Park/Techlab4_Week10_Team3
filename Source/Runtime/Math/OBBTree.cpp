@@ -51,5 +51,22 @@ int32 FOBBTree::BuildNode(uint32 First, uint32 Count, uint32 Depth)
 
 	if (Depth >= MaxDepth || Count <= MinTriangles) return NodeIndex;
 
+	const FVector Size = Bounds.Max - Bounds.Min;
+	int32 axisIndex = Size.X > Size.Y ? 0 : 1;
+	if (Size.Z > Size[axisIndex]) axisIndex = 2;
+	
+
+	const float Mid = (Bounds.Min[axisIndex] + Bounds.Max[axisIndex]) * 0.5f;
+	auto Begin = Triangles.begin() + First;
+	auto End = Begin + Count;
+	auto Split = std::partition(Begin, End, 
+		[&](uint32 TriangleIndex) { return Centroids[TriangleIndex][axisIndex] < Mid; });
+
+	// 쏠림 확인 
+	uint32 LeftCount = static_cast <uint32> (Split - Begin);
+	if (LeftCount == 0 || LeftCount == Count) {
+		LeftCount = Count / 2;
+	}
+
 	return NodeIndex;
 }
