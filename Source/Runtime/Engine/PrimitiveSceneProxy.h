@@ -48,6 +48,7 @@ public:
 
 	bool bCastsShadow = true;
 	bool bReceiveShadow = true;
+	bool bReceivesDecals = true;
 protected:
 	bool bSkinned = false;
 	TSharedPtr<const FMeshRenderState> RenderState;

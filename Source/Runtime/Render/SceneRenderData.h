@@ -37,6 +37,14 @@ struct FRenderStats
 	uint32 ShadowCastersSkippedSmall = 0;
 	uint32 ShadowDepthDraws = 0;    // 언리얼 구조 ShadowDepths 패스에서 그린 그림자 맵 수
 
+	uint32 DecalCount = 0;
+	uint32 DecalsRendered = 0;
+	uint32 DecalDrawCalls = 0;
+	uint32 DecalItemsTested = 0;
+	uint32 DecalNarrowTested = 0;
+	uint32 DecalBroadTests = 0;
+	uint32 DecalOBBTreeTested = 0;
+
 	uint32 CascadeViewsRedrawn = 0;
 	uint32 CascadeViewsCached = 0;
 

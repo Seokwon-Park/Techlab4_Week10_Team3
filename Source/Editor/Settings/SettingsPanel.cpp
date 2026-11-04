@@ -47,6 +47,16 @@ void FSettingsPanel::OnRender()
 	ImGui::Checkbox("Cache Shadows", &Settings.bCacheShadows);
 	ImGui::Checkbox("Draw Bounding Box", &Settings.bDrawBoundingBox);
 	ImGui::Checkbox("Show Object UUID", &Settings.bShowUUID);
+	ImGui::Checkbox("Draw Decals", &Settings.bDrawDecals);
+	ImGui::Checkbox("Decal Broad Phase (AABB)", &Settings.bDecalCulling);
+	ImGui::Indent();
+	ImGui::Checkbox("Use BVH", &Settings.bDecalBVHCulling);
+	ImGui::Unindent();
+	ImGui::Checkbox("Decal Narrow Phase (SAT)", &Settings.bDecalNarrowCulling);
+	ImGui::Indent();
+	ImGui::Checkbox("Use OBBTree", &Settings.bDecalOBBTree);
+	ImGui::Unindent();
+
 	const char* RenderingPaths[] = { "Forward", "Deferred" };
 	int RenderingPathIndex = static_cast<int>(Settings.RenderingPath);
 	ImGui::SetNextItemWidth(200.0f);
@@ -190,6 +200,11 @@ bool FSettingsPanel::SaveSettings() const
 	File << "PcfMode=" << static_cast<uint32_t>(Settings.PcfMode) << "\n";
 	File << "DrawBoundingBox=" << Settings.bDrawBoundingBox << "\n";
 	File << "ShowUUID=" << Settings.bShowUUID << "\n";
+	File << "DrawDecals=" << Settings.bDrawDecals << "\n";
+	File << "DecalCulling=" << Settings.bDecalCulling << "\n";
+	File << "DecalNarrowCulling=" << Settings.bDecalNarrowCulling << "\n";
+	File << "DecalBVHCulling=" << Settings.bDecalBVHCulling << "\n";
+	File << "DecalOBBTree=" << Settings.bDecalOBBTree << "\n";
 	File << "DrawBatchLine=" << Settings.bDrawBatchLine << "\n";
 	File << "DrawCascadeBounds=" << Settings.bDrawCascadeBounds << "\n";
 	File << "DrawPSGrid=" << Settings.bDrawPSGrid << "\n";
@@ -341,6 +356,11 @@ bool FSettingsPanel::LoadSettings()
 				}
 				else if (Key == "DrawBoundingBox") Settings.bDrawBoundingBox = std::stoi(ValueStr);
 				else if (Key == "ShowUUID") Settings.bShowUUID = std::stoi(ValueStr);
+				else if (Key == "DrawDecals") Settings.bDrawDecals = std::stoi(ValueStr);
+				else if (Key == "DecalCulling") Settings.bDecalCulling = std::stoi(ValueStr);
+				else if (Key == "DecalNarrowCulling") Settings.bDecalNarrowCulling = std::stoi(ValueStr);
+				else if (Key == "DecalBVHCulling") Settings.bDecalBVHCulling = std::stoi(ValueStr);
+				else if (Key == "DecalOBBTree") Settings.bDecalOBBTree = std::stoi(ValueStr);
 				else if (Key == "DrawBatchLine") Settings.bDrawBatchLine = std::stoi(ValueStr);
 				else if (Key == "DrawCascadeBounds") Settings.bDrawCascadeBounds = std::stoi(ValueStr);
 				else if (Key == "DrawPSGrid") Settings.bDrawPSGrid = std::stoi(ValueStr);

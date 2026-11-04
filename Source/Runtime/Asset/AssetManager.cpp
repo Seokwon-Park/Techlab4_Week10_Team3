@@ -131,6 +131,10 @@ namespace
 			Mesh->MeshData.BuildTriangleBVH();
 		}
 		{
+			FLoadStageTimer Timer{ "Mesh/BuildOBBTree" };
+			Mesh->MeshData.BuildOBBTree();
+		}
+		{
 			FLoadStageTimer Timer{ "Mesh/RebuildRenderData" };
 			Mesh->RebuildRenderData();
 		}
@@ -610,6 +614,7 @@ bool UAssetManager::ReorientStaticMesh(UStaticMesh& Mesh, const std::function<FV
 	Mesh.VertexBuffer = std::move(VB);
 
 	Data.BuildTriangleBVH();   // 피킹용 삼각형 BVH도 새 좌표로
+	Data.BuildOBBTree();
 	return true;
 }
 

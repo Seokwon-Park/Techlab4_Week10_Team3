@@ -6,7 +6,8 @@
 #include "Engine/Scene.h"
 
 FPrimitiveSceneProxy::FPrimitiveSceneProxy(UPrimitiveComponent* InComponent)
-    : Component(InComponent), bCastsShadow(InComponent->bCastShadow), bReceiveShadow(InComponent->bReceiveShadow) 
+    : Component(InComponent), bCastsShadow(InComponent->bCastShadow), 
+    bReceiveShadow(InComponent->bReceiveShadow), bReceivesDecals(InComponent->bReceivesDecals)
 {
 }
 
@@ -36,6 +37,7 @@ void FPrimitiveSceneProxy::UpdateCommonFlags()
     bHiddenInGame = !Component->IsShown(true);
     bCastsShadow = Component->bCastShadow;
     bReceiveShadow = Component->bReceiveShadow;
+	bReceivesDecals = Component->bReceivesDecals;
 }
 
 void FPrimitiveSceneProxy::GetDynamicMeshElements(FRenderQueue& Queue, const FViewContext& View)

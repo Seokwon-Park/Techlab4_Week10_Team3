@@ -469,6 +469,17 @@ const FRenderStats& Stats = RenderData.RenderStats;
 				Stats.CascadeViewsRedrawn, Stats.CascadeViewsCached), ValueColor });
 		}
 	}
+	if (FStatOverlay::IsEnabled(EStatFlags::Decal)) {
+		Lines.Add({ "Decal", TitleColor });
+		Lines.Add({ std::format("  Decals {}", Stats.DecalCount), ValueColor });
+		Lines.Add({ std::format("  Decals Rendered {}", Stats.DecalsRendered), ValueColor });
+		Lines.Add({ std::format("  Decal Draw Calls {}", Stats.DecalDrawCalls), ValueColor });
+		Lines.Add({ std::format("  Decal Items Tested {}", Stats.DecalItemsTested), ValueColor });
+		Lines.Add({ std::format("  Decal Items Culled {}", Stats.DecalItemsTested - Stats.DecalDrawCalls), ValueColor });
+		Lines.Add({ std::format("  Decal Broad Tested {}", Stats.DecalBroadTests), ValueColor });
+		Lines.Add({ std::format("  Decal Narrow Tested {}", Stats.DecalNarrowTested), ValueColor });
+		Lines.Add({ std::format("  Decal OBBTree Tested {}", Stats.DecalOBBTreeTested), ValueColor });
+	}
 
 	if (Lines.Num() == 0 && ProfileLines.Num() == 0)
 		return;
