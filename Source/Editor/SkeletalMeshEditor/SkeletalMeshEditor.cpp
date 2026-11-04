@@ -460,8 +460,9 @@ void FSkeletalMeshEditor::UpdateBonePicking()
 int32 FSkeletalMeshEditor::PickBone(const FVector2& MousePosition) const
 {
 	constexpr float HitPixels = 12.0f;
-	constexpr float DistanceTolerance = 0.001f;
 	const FMatrix ViewProjection = ViewportClient->GetViewProjectionMatrix();
+	const FMatrix InverseViewProjection = ViewProjection.Inverse();
+	const FVector CameraPosition = ViewportClient->GetViewLocation();
 	const TArray<FBoneInfo>& Bones = Mesh->GetRefSkeleton();
 
 	TArray<FVector4> ClipPositions;
@@ -480,22 +481,25 @@ int32 FSkeletalMeshEditor::PickBone(const FVector2& MousePosition) const
 	};
 
 	int32 BestBoneIndex = -1;
-	float BestDistance = HitPixels;
-	float BestDepth = FLT_MAX;
-	const auto ConsiderCandidate = [&](int32 Index, float Distance, float Depth)
+	float BestCameraDistanceSquared = FLT_MAX;
+	const auto ConsiderCandidate = [&](int32 Index, float ScreenDistance, const FVector4& ClipPosition)
 	{
-		// 화면 거리가 같은 후보는 카메라에 가까운 본을 선택합니다.
-		if (Distance <= HitPixels && (BestBoneIndex < 0 ||
-			Distance < BestDistance - DistanceTolerance ||
-			(fabsf(Distance - BestDistance) <= DistanceTolerance && Depth < BestDepth)))
+		if (ScreenDistance > HitPixels)
+		{
+			return;
+		}
+
+		const FVector4 World = ClipPosition * InverseViewProjection;
+		const FVector Position(World.X / World.W, World.Y / World.W, World.Z / World.W);
+		const float CameraDistanceSquared = (Position - CameraPosition).SizeSquared();
+		if (CameraDistanceSquared < BestCameraDistanceSquared)
 		{
 			BestBoneIndex = Index;
-			BestDistance = Distance;
-			BestDepth = Depth;
+			BestCameraDistanceSquared = CameraDistanceSquared;
 		}
 	};
 
-	// 관절을 먼저 검사하여 루트와 말단 본도 선택할 수 있게 합니다.
+	// Joint 후보 중 카메라에 가장 가까운 Joint를 선택합니다.
 	for (int32 Index = 0; Index < Bones.Num(); ++Index)
 	{
 		const FVector4& Clip = ClipPositions[Index];
@@ -505,7 +509,7 @@ int32 FSkeletalMeshEditor::PickBone(const FVector2& MousePosition) const
 		}
 
 		const FVector2 Delta = MousePosition - ToScreen(Clip);
-		ConsiderCandidate(Index, sqrtf(Delta.X * Delta.X + Delta.Y * Delta.Y), Clip.Z / Clip.W);
+		ConsiderCandidate(Index, sqrtf(Delta.X * Delta.X + Delta.Y * Delta.Y), Clip);
 	}
 
 	if (BestBoneIndex >= 0)
@@ -513,7 +517,7 @@ int32 FSkeletalMeshEditor::PickBone(const FVector2& MousePosition) const
 		return BestBoneIndex;
 	}
 
-	// 관절에 맞지 않았다면 부모와 자식을 잇는 선분을 검사합니다.
+	// Joint 후보가 없을 때만 Bone을 검사합니다. 연결부는 부모 본을 선택합니다.
 	for (int32 Index = 0; Index < Bones.Num(); ++Index)
 	{
 		const int32 ParentIndex = Bones[Index].ParentIndex;
@@ -538,9 +542,9 @@ int32 FSkeletalMeshEditor::PickBone(const FVector2& MousePosition) const
 			? FMath::Clamp((ToMouse.X * Segment.X + ToMouse.Y * Segment.Y) / LengthSquared, 0.0f, 1.0f)
 			: 0.0f;
 
-		// NDC 깊이는 화면 선분의 비율로 보간합니다. 연결선은 부모 본을 선택합니다.
-		const float Depth = Start.Z / Start.W * (1.0f - Alpha) + End.Z / End.W * Alpha;
-		ConsiderCandidate(ParentIndex, DistanceToSegment(MousePosition, ScreenStart, ScreenEnd), Depth);
+		// 화면에서 마우스에 가장 가까운 점을 보간하고 월드 공간의 카메라 거리로 비교합니다.
+		const FVector4 ClipPosition = (Start / Start.W) * (1.0f - Alpha) + (End / End.W) * Alpha;
+		ConsiderCandidate(ParentIndex, DistanceToSegment(MousePosition, ScreenStart, ScreenEnd), ClipPosition);
 	}
 
 	return BestBoneIndex;
