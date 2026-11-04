@@ -540,12 +540,16 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 					if (ForwardBatches.IsEmpty()) return;
 
 					// 실제 메시 패스와 같은 VS를 사용해 깊이 계산을 일치시킨다.
-					FShaderProgram DepthProgram(ForwardBatches.Front().Pipeline.Shader->VertexShader, DepthPipeline->Shader->PixelShader);
+					FShaderProgram DepthProgram(nullptr, DepthPipeline->Shader->PixelShader);
+					FShaderProgram SkinnedDepthProgram(nullptr, DepthPipeline->Shader->PixelShader);
 					TArray<FMeshDrawBatch> DepthBatches = ForwardBatches;
 					for (FMeshDrawBatch& Batch : DepthBatches)
 					{
+						// GPU 스킨 배치는 VS가 달라서 프로그램을 나눈다
+						FShaderProgram& Program = Batch.BoneBuffer ? SkinnedDepthProgram : DepthProgram;
+						Program.VertexShader = Batch.Pipeline.Shader->VertexShader;
 						Batch.Pipeline = *DepthPipeline;
-						Batch.Pipeline.Shader = &DepthProgram;
+						Batch.Pipeline.Shader = &Program;
 					}
 					Renderer->DrawMeshes(DepthBatches);
 				})) return false;
@@ -578,7 +582,7 @@ bool FSceneRenderer::AddCorePasses(FRenderGraphBuilder& Graph, FRenderer* Render
 			Culling.Name = CullingMode == ELightCullingMode::Clustered
 				? "ClusterLightCulling" : "TileLightCulling";
 			Culling.ReadResources = { SceneLights->GetBuffer() };
-			if (CullingMode == ELightCullingMode::Tiled)
+			if (CullingMode == ELightCullingMode::Tiled25D)
 				Culling.ReadResources.push_back(Targets.Depth->GetRawPtr());
 
 			const std::array<ID3D11Resource*, 4> Writes = Tiles.GetWriteResources();

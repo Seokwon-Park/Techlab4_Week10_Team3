@@ -7,6 +7,21 @@
 
 #include <cfloat>
 
+namespace
+{
+	TUniquePtr<FSkeletalMeshObject> MakeMeshObject(USkeletalMesh* Mesh)
+	{
+		if (USkinnedMeshComponent::bUseGPUSkinning)
+		{
+			TUniquePtr<FSkeletalMeshObjectGPUSkin> GPUObject = MakeUnique<FSkeletalMeshObjectGPUSkin>(Mesh);
+			if (GPUObject->IsValid())
+				return GPUObject;
+			HTR_LOG(Warning, "GPU skinning unavailable; falling back to CPU skinning.");
+		}
+		return MakeUnique<FSkeletalMeshObjectCPUSkin>(Mesh);
+	}
+}
+
 USkinnedMeshComponent::USkinnedMeshComponent()
 {
 	PrimaryComponentTick.bCanEverTick = true;
@@ -117,13 +132,20 @@ void USkinnedMeshComponent::SendRenderDynamicData()
 void USkinnedMeshComponent::RecreateMeshObject()
 {
 	const bool bValid = SkeletalMesh && !SkeletalMesh->GetRenderData().LODRenderData.IsEmpty();
-	MeshObject = bValid ? MakeUnique<FSkeletalMeshObjectCPUSkin>(SkeletalMesh) : nullptr;
+	MeshObject = bValid ? MakeMeshObject(SkeletalMesh) : nullptr;
 	ComponentSpaceTransforms.Reset();
 	OnSkeletalMeshChanged();
 	
 	MarkRenderStateDirty();
 	OnTransformDirty();
 	bBoneTransformsDirty = true;
+}
+
+void USkinnedMeshComponent::RefreshSkinningMode()
+{
+	if (!MeshObject) return;
+	MeshObject = MakeMeshObject(SkeletalMesh);
+	UpdateBoneTransformsNow();   // 포즈는 그대로 두고 새 MeshObject에 다시 올린다
 }
 
 void USkinnedMeshComponent::Serialize(FStructuredArchive::FRecord Record)

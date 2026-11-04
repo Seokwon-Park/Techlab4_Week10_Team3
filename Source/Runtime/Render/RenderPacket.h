@@ -10,6 +10,7 @@
 
 class FPrimitiveSceneProxy;
 inline constexpr uint32 InvalidObjectSlot = ~0u;
+inline constexpr uint32 BoneMatrixBufferSlot = 14; // GpuSkinCommon.hlsli의 t14
 
 struct FRenderPacket
 {
@@ -19,6 +20,7 @@ struct FRenderPacket
 	UStaticMesh* Mesh = nullptr; // static
 	FVertexBuffer* VertexBuffer = nullptr; // dynamic
 	FIndexBuffer* IndexBuffer= nullptr; // dynamic
+	const FStructuredBuffer* BoneBuffer = nullptr; // GPU 스킨
 
 	UMaterial* Material = nullptr;
 	const void* MaterialParamData = nullptr;

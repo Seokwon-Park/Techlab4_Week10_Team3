@@ -1,4 +1,6 @@
 #pragma pack_matrix(row_major)
+#include "GpuSkinCommon.hlsli"
+
 cbuffer Viewconstants : register(b0)
 {
     matrix VP;
@@ -32,6 +34,7 @@ struct VS_INPUT
 	float4 tangent : TANGENT;
 	float2 t : TEXCOORD;
 	float4 c : COLOR;
+	GPU_SKIN_VS_INPUT
 };
 
 struct PS_INPUT
@@ -83,6 +86,7 @@ float FogTransmittance(float3 Position)
 PS_INPUT mainVS(VS_INPUT input)
 {
     PS_INPUT output;
+    GPU_SKIN_APPLY(input, input.p, input.n, input.tangent);
 
     float4 WorldPosition = mul(float4(input.p, 1.0f), World);
     output.position = mul(WorldPosition, VP);

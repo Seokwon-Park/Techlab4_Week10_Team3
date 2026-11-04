@@ -19,6 +19,11 @@ struct FSkeletalMeshLODRenderData
 	TArray<FSkeletalMeshSection> Sections;
 	TUniquePtr<FIndexBuffer> IndexBuffer;
 	FBox BindAABB;
+
+	// GPU 스키닝 입력. 포즈와 무관하므로 에셋이 갖고 인스턴스끼리 공유한다
+	TUniquePtr<FVertexBuffer> GpuSkinVertexBuffer;
+	// 본마다 가중치가 있는 정점의 바인드 바운드. 정점이 없는 본은 Min > Max
+	TArray<FBox> BoneBounds;
 };
 
 struct FSkeletalMeshRenderData

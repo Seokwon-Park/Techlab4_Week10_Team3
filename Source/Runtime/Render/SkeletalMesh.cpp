@@ -3,6 +3,34 @@
 #include "Render/RenderCommand.h"
 #include "Asset/AssetManager.h"
 
+namespace
+{
+	TArray<FBox> BuildBoneBounds(const FSkeletalMeshLODRenderData& LOD, int32 NumBones)
+	{
+		TArray<FBox> Bounds;
+		Bounds.SetNum(NumBones);
+		for (FBox& Box : Bounds)
+			Box = FBox{ FVector(FLT_MAX, FLT_MAX, FLT_MAX), FVector(-FLT_MAX, -FLT_MAX, -FLT_MAX) };
+
+		for (int32 V = 0; V < LOD.BindVertices.Num(); ++V)
+		{
+			const FVector& Position = LOD.BindVertices[V].Position;
+			const FSkinWeight& Weight = LOD.SkinWeights[V];
+			for (int32 K = 0; K < MaxBoneInfluences; ++K)
+			{
+				if (Weight.Weight[K] <= 0.0f) continue;
+				FBox& Box = Bounds[Weight.BoneIndex[K]];
+				for (int Axis = 0; Axis < 3; ++Axis)
+				{
+					Box.Min[Axis] = std::min(Box.Min[Axis], Position[Axis]);
+					Box.Max[Axis] = std::max(Box.Max[Axis], Position[Axis]);
+				}
+			}
+		}
+		return Bounds;
+	}
+}
+
 bool USkeletalMesh::Build(FSkeletalMeshData&& ImportData, FString& OutError)
 {
 	// CreateStaticMesh와 같은 기본값: 슬롯/섹션이 없으면 하나씩 채운다
@@ -58,6 +86,21 @@ bool USkeletalMesh::Build(FSkeletalMeshData&& ImportData, FString& OutError)
 			LOD.BindAABB.Max[Axis] = std::max(LOD.BindAABB.Max[Axis], Vertex.Position[Axis]);
 		}
 	}
+
+	TArray<FGpuSkinVertex> GpuSkinVertices;
+	GpuSkinVertices.SetNum(LOD.BindVertices.Num());
+	for (int32 V = 0; V < GpuSkinVertices.Num(); ++V)
+	{
+		GpuSkinVertices[V].Vertex = LOD.BindVertices[V];
+		for (int32 K = 0; K < MaxBoneInfluences; ++K)
+		{
+			GpuSkinVertices[V].BoneIndex[K] = LOD.SkinWeights[V].BoneIndex[K];
+			GpuSkinVertices[V].Weight[K] = LOD.SkinWeights[V].Weight[K];
+		}
+	}
+	LOD.GpuSkinVertexBuffer = RenderCommand::CreateStaticVertexBuffer(GpuSkinVertices.GetData(),
+		sizeof(FGpuSkinVertex) * static_cast<uint32>(GpuSkinVertices.Num()), sizeof(FGpuSkinVertex));
+	LOD.BoneBounds = BuildBoneBounds(LOD, ImportData.Bones.Num());
 
 	RefSkeleton = std::move(ImportData.Bones);
 	MaterialSlots = std::move(ImportData.MaterialSlots);

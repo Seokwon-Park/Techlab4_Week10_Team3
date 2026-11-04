@@ -30,6 +30,10 @@ public:
 
 	virtual bool LineTraceComponentLocal(const FRay& LocalRay, float& Out) override;
 
+	// 엔진 전체에 적용한다. 값을 바꾸면 RefreshSkinningMode로 기존 컴포넌트에 반영한다
+	inline static bool bUseGPUSkinning = false;
+	void RefreshSkinningMode();
+
 	void MarkBoneTransformsDirty() { bBoneTransformsDirty = true; }
 	void UpdateBoneTransformsNow();
 

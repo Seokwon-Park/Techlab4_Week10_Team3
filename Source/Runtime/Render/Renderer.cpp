@@ -45,7 +45,9 @@ void FRenderer::BindBatch(const FMeshDrawBatch& Batch)
 	
 	RenderCommand::BindVertexBuffer(Batch.VertexBuffer);
 	RenderCommand::BindIndexBuffer(Batch.IndexBuffer);
-	
+	if (Batch.BoneBuffer)
+		RenderCommand::BindShaderResource(BoneMatrixBufferSlot, Batch.BoneBuffer, EShaderBindFlagBits::Vertex);
+
 	if (Batch.bBindViewConstants)
 		RenderCommand::BindConstantBuffer(0, ViewCB.get(), EShaderBindFlagBits::Vertex);
 	for (uint32 Index = 0; Index < Batch.Textures.Num(); ++Index)

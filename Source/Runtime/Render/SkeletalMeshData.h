@@ -3,8 +3,8 @@
 #include "Render/Vertex.h"
 #include "Math/Box.h"
 #include "Math/Transform.h"
+#include <Containers/Array.h>
 
-inline constexpr int32 MaxBoneInfluences = 4;
 
 struct FSkeletalMeshSection
 {

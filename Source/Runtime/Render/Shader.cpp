@@ -122,7 +122,6 @@ void FVertexShader::InputLayoutReflection(ID3D11Device* Device, const FShaderByt
 	D3D11_SHADER_DESC Desc{};
 	Reflection->GetDesc(&Desc);
 
-
 	TArray<D3D11_INPUT_ELEMENT_DESC> InputLayoutDesc;
 	for (uint32 i = 0; i < Desc.InputParameters; ++i)
 	{
