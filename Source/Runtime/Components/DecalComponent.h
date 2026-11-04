@@ -37,6 +37,13 @@ public:
 
 	bool IsAdditive() const { return bAdditive; }
 
+	void SetPerspective(bool bInPerspective) { bPerspective = bInPerspective; }
+	void SetAdditive(bool bInAdditive) { bAdditive = bInAdditive; }
+	void SetFadeTimes(float InDelay, float InFadeIn, float InVisible, float InFadeOut)
+	{
+		Delay = InDelay; FadeIn = InFadeIn; Visible = InVisible; FadeOut = InFadeOut;
+	}
+
 protected:
 	virtual bool ShouldCreateRenderState() const override
 	{

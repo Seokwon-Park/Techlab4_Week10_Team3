@@ -11,6 +11,7 @@
 #include "GameFramework/Actor/RectLightActor.h"
 #include "GameFramework/Actor/SkyLightActor.h"
 #include "GameFramework/Actor/DecalActor.h"
+#include "GameFramework/Actor/FakeSpotLightActor.h"
 #include "GameFramework/Actor/TextRenderActor.h"
 #include "LevelSequence/LevelSequenceActor.h"
 #include "GameFramework/Actor/ExponentialHeightFogActor.h"
