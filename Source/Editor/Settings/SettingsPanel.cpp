@@ -48,10 +48,15 @@ void FSettingsPanel::OnRender()
 	ImGui::Checkbox("Draw Bounding Box", &Settings.bDrawBoundingBox);
 	ImGui::Checkbox("Show Object UUID", &Settings.bShowUUID);
 	ImGui::Checkbox("Draw Decals", &Settings.bDrawDecals);
-	ImGui::Checkbox("Decal Broad Phase (AABB)", &Settings.bDecalCulling);
-	ImGui::Indent();
-	ImGui::Checkbox("Use BVH", &Settings.bDecalBVHCulling);
-	ImGui::Unindent();
+	const char* DecalBroadPhases[] = { "Off", "Linear AABB", "BVH" };
+	int DecalBroadPhaseIndex = Settings.bDecalBVHCulling ? 2 : (Settings.bDecalCulling ? 1 : 0);
+	ImGui::SetNextItemWidth(200.0f);
+	if (ImGui::Combo("Decal Broad Phase", &DecalBroadPhaseIndex,
+		DecalBroadPhases, IM_ARRAYSIZE(DecalBroadPhases)))
+	{
+		Settings.bDecalCulling = DecalBroadPhaseIndex != 0;
+		Settings.bDecalBVHCulling = DecalBroadPhaseIndex == 2;
+	}
 	ImGui::Checkbox("Decal Narrow Phase (SAT)", &Settings.bDecalNarrowCulling);
 	ImGui::Indent();
 	ImGui::Checkbox("Use OBBTree", &Settings.bDecalOBBTree);
