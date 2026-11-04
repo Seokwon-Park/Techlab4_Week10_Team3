@@ -33,6 +33,49 @@ void FOBBTree::Build(const TArray<FVector>& Positions, const TArray<uint32>& Ind
 	BuildNode(0, static_cast<uint32> (Triangles.Num()), 0);
 }
 
+bool FOBBTree::Intersects(const FOBB& DecalWorld, const FMatrix& LocalToWorld) const
+{
+	if (Nodes.Num() == 0) return true; 
+	
+	FVector Axis[3];
+	float Scale[3];
+	for (int32 i = 0; i < 3; i++) {
+		const FVector Row(LocalToWorld[i][0], LocalToWorld[i][1], LocalToWorld[i][2]);
+		Scale[i] = Row.Size();
+		Axis[i] = Row / Scale[i];
+	}
+
+	TArray<int32> OBBStack;
+	OBBStack.Add(0);
+	while (!OBBStack.IsEmpty()) {
+		const int32 nodeIndex = OBBStack.Last();
+		OBBStack.RemoveLast();
+
+		// Local to World 
+		FBox LocalBounds = Nodes[nodeIndex].LocalBounds;
+		const FVector LocalCenter = (LocalBounds.Min + LocalBounds.Max) * 0.5f;
+		const FVector LocalExtent = (LocalBounds.Max - LocalBounds.Min) * 0.5f;
+
+		FOBB WorldOBB;
+		const FVector4 C = FVector4(LocalCenter, 1.0f) * LocalToWorld;
+		WorldOBB.Center = FVector(C.X, C.Y, C.Z);
+		for (int32 i = 0; i < 3; i++) {
+			WorldOBB.Axis[i] = Axis[i];
+		}
+		WorldOBB.Extent = { LocalExtent.X * Scale[0], LocalExtent.Y * Scale[1], LocalExtent.Z * Scale[2] };
+
+		
+		if (!IntersectOBBOBB(DecalWorld, WorldOBB)) continue;	// 겹치지 않으면 Pruning
+		if (Nodes[nodeIndex].IsLeaf()) return true;		// 찾음
+
+		// 더 내려가기
+		OBBStack.Add(Nodes[nodeIndex].Left);
+		OBBStack.Add(Nodes[nodeIndex].Right);
+	}
+
+	return false;
+}
+
 int32 FOBBTree::BuildNode(uint32 First, uint32 Count, uint32 Depth)
 {
 	FBox Bounds = TriangleBounds[Triangles[First]];

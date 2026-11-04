@@ -1,6 +1,7 @@
 ﻿#pragma once
 
 #include "Box.h"
+#include "Frustum.h"
 
 struct FOBBTreeNode {
 	FBox LocalBounds;
@@ -15,6 +16,9 @@ struct FOBBTreeNode {
 class FOBBTree {
 public:
 	void Build(const TArray <FVector>& Positions, const TArray<uint32>& Indices);
+	const TArray <FOBBTreeNode> & GetNodes() const { return Nodes; }
+
+	bool Intersects(const FOBB& DecalWorld, const FMatrix& LocalToWorld) const;
 
 private:
 	int32 BuildNode(uint32 First, uint32 Count, uint32 Depth);
