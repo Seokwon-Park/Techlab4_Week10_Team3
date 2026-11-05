@@ -44,6 +44,7 @@ UWidget* FWidgetSerializer::LoadWidget(FStructuredArchive::FRecord Record)
 bool FWidgetSerializer::SaveAssetToBytes(FWidgetAssetData& Asset, TArray<uint8>& OutBytes)
 {
 	FMemoryWriter Writer(OutBytes);
+	Writer.SetIsPersistent(true);   // 파일에는 Transient를 쓰지 않는다
 	{
 		// 선언 순서 = 소멸 역순: Ar(Close) → Formatter(dump → Writer)
 		FJsonArchiveOutputFormatter Formatter(Writer);
@@ -64,7 +65,7 @@ bool FWidgetSerializer::SaveAssetToBytes(FWidgetAssetData& Asset, TArray<uint8>&
 
 bool FWidgetSerializer::LoadAssetFromBytes(const TArray<uint8>& Bytes, FWidgetAssetData& OutAsset)
 {
-	FMemoryReader Reader(Bytes);
+	FMemoryReader Reader(Bytes, true);
 	FJsonArchiveInputFormatter Formatter(Reader);
 	if (Reader.IsError())
 	{

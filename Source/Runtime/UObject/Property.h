@@ -13,6 +13,7 @@
 #include "Serialization/TypeSerializer.h"
 
 class UObject;
+class UScriptStruct;
 
 // 프로퍼티 지정자 (UE: ObjectMacros.h의 EPropertyFlags)
 enum EPropertyFlags : uint32
@@ -53,6 +54,9 @@ public:
     uint32 PropertyFlags = CPF_Default;
 
     bool HasAnyFlags(uint32 InFlags) const { return (PropertyFlags & InFlags) != 0; }
+
+    // 파일로 저장하거나 복제할 때(Persistent) Transient는 건너뛴다 (UE: FProperty::ShouldSerializeValue)
+    bool ShouldSerializeValue(const FArchive& Ar) const { return !(HasAnyFlags(CPF_Transient) && Ar.IsPersistent()); }
 
     // 객체 주소 → 이 멤버의 주소 (UE: FProperty::ContainerPtrToValuePtr)
     template <typename ValueType = void>
@@ -215,6 +219,18 @@ public:
     void SerializeItem(FStructuredArchive::FSlot Slot, void* Value) const override;
 };
 
+// USTRUCT()를 붙인 구조체 멤버 (UE: UnrealType.h의 FStructProperty)
+// 안쪽 프로퍼티는 Struct가 가지고 있다. 저장은 Struct에게 맡기고, 컨테이너로 객체 대신 이 멤버의 주소를 넘긴다.
+class FStructProperty : public FProperty
+{
+    DECLARE_FIELD(FStructProperty, FProperty)
+
+public:
+    UScriptStruct* Struct = nullptr;
+
+    void SerializeItem(FStructuredArchive::FSlot Slot, void* Value) const override;
+};
+
 // ---- C++ 타입 → 프로퍼티 클래스 ----
 // UE는 UHT가 멤버 타입을 읽고 .gen.cpp에 FFloatPropertyParams 같은 표를 쓴다.
 // Hitori의 HHT는 타입을 읽지 않으므로 decltype(멤버)를 받아 여기서 고른다.
@@ -252,6 +268,14 @@ template <typename T>
 struct TPropertyTypeFor<T*>
 {
     using Type = FObjectProperty;
+};
+
+// USTRUCT의 GENERATED_BODY()가 StaticStruct()를 만든다. FVector처럼 위 표에 직접 적은 타입은 그쪽이 먼저 걸린다.
+template <typename T>
+    requires requires { { T::StaticStruct() } -> std::same_as<UScriptStruct*>; }
+struct TPropertyTypeFor<T>
+{
+    using Type = FStructProperty;
 };
 
 // meta를 쓸 수 있는 타입. HHT가 만든 static_assert가 이걸로 검사한다.

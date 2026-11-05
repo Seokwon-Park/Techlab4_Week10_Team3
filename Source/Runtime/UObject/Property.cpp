@@ -50,3 +50,10 @@ void FEnumProperty::SerializeItem(FStructuredArchive::FSlot Slot, void* Value) c
             HTR_LOG(Warning, "Load: '{}' has no enum entry '{}', keeping default", Name, EntryName);
     }
 }
+
+// ---- FStructProperty ----
+
+void FStructProperty::SerializeItem(FStructuredArchive::FSlot Slot, void* Value) const
+{
+    Struct->SerializeTaggedProperties(Slot, Value);
+}

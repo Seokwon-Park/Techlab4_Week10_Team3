@@ -6,6 +6,7 @@
 struct FNameEntryId
 {
 	FNameEntryId() : Value(0) {}
+	explicit FNameEntryId(ENoInit) {}
 	explicit FNameEntryId(uint32 InValue) : Value(InValue) {}
 
 	uint32 ToUnstableInt() const { return Value; }
@@ -19,7 +20,8 @@ private:
 class FName
 {
 public:
-	FName() = default;
+	FName() : Number(0) {}
+	explicit FName(ENoInit) : ComparisonIndex(NoInit), DisplayIndex(NoInit) {}
 	FName(const char* Name);
 	FName(const FString& Name);
 	FName(FName Other, int32 InInternalNumber);
@@ -45,7 +47,7 @@ public:
 private:
 	FNameEntryId ComparisonIndex;  // 비교용
 	FNameEntryId DisplayIndex;     // 표시용
-	uint32 Number = 0;          // Cube_0 일 때, Number = 1이다. (0은 상태없음)
+	uint32 Number;          // Cube_0 일 때, Number = 1이다. (0은 상태없음)
 };
 
 inline const FName NAME_None{};

@@ -2,7 +2,7 @@
 
 #include "Core/EngineString.h"
 
-class UClass;
+class UStruct;
 
 // FField의 타입 정보 (UE: Field.h의 FFieldClass)
 // UObject는 UClass로 타입을 구분하듯, FField는 FFieldClass로 구분한다. FField는 UObject가 아니라서 UClass를 쓸 수 없다.
@@ -66,10 +66,10 @@ public:
     bool IsA() const { return IsA(T::StaticClass()); }
 
     const FString& GetName() const { return Name; }
-    UClass* GetOwnerClass() const { return Owner; }
+    UStruct* GetOwnerStruct() const { return Owner; }
 
     FString Name;
-    UClass* Owner = nullptr; // 이 필드를 선언한 클래스
+    UStruct* Owner = nullptr; // 이 필드를 선언한 클래스나 구조체 (UE: FField::Owner)
 };
 
 // UObject의 Cast<T>에 해당 (UE: Field.h의 CastField). 타입이 다르면 nullptr

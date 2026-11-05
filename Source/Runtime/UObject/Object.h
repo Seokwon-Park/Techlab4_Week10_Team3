@@ -27,7 +27,7 @@ public:                                                                 \
 	static UObject* InternalConstructInstance(void* Memory)				\
 	{																	\
 		if constexpr (std::is_abstract_v<T>) { return nullptr; }		\
-		else { return new (Memory) T(); }								\
+		else { return new (Memory) T; }									\
 	}																	\
     static UClass* StaticClass()                                        \
     {                                                                   \
@@ -37,7 +37,7 @@ public:                                                                 \
         {                                                               \
             c.Name  = #ClassName;                                       \
             c.Super = Super::StaticClass();								\
-            c.ClassSize = sizeof(ClassName);							\
+            c.Size = sizeof(ClassName);							\
 			c.Constructor = std::is_abstract_v<ClassName> ? nullptr : &InternalConstructInstance<ClassName>;\
 			if (&ClassName::RegisterProperties != &Super::RegisterProperties) \
 			{															\
@@ -56,23 +56,16 @@ public:                                                                 \
     inline static FAutoRegister AutoRegister;							\
 private:																
 
-class UObject
+
+// UObject의 정체(Class, Outer, Name, Flags). UE의 UObjectBase.
+class UObjectBase
 {
-	friend UObject* StaticConstructObject_Internal(const struct FStaticConstructObjectParameters& Params);
+	friend UObject* StaticAllocateObject(const UClass*, UObject*, FName, EObjectFlags, bool, bool*);
 public:
-	UObject();
-	UObject(bool bRegister);
-	virtual ~UObject();
+	// vptr이 맨 앞에 오게 한다. 없으면 UObject 안에서 멤버 위치가 8바이트 밀린다.
+	virtual ~UObjectBase() = default;
 
-	static UClass* StaticClass();
 	UClass* GetClass() const { return ClassPrivate; }
-
-	template <typename T>
-	bool IsA() const { return IsA(T::StaticClass()); }
-	bool IsA(const UClass* const Class) const;
-
-	uint32 GetUUID() const { return ObjectUUID; }
-	void SetUUID(uint32 Uid) { ObjectUUID = Uid; }
 
 	const FName& GetFName() const { return Name; }         // FName 비교용
 	FString GetName() const { return Name.ToString(); }    // Name 출력용
@@ -82,15 +75,47 @@ public:
 
 	void SetName(const FName& InName) { Name = FName(InName); }
 
-	inline static void RegisterProperties(UClass* InClass) {};
-	inline static void RegisterFunctions(UClass* InClass) {};   // 추가
-
 	inline void SetFlags(EObjectFlags NewFlags) { Flags |= NewFlags; }
 	inline void ClearFlags(EObjectFlags FlagsToClear) { Flags &= ~FlagsToClear; }
 	inline bool HasAnyFlags(EObjectFlags FlagsToCheck) const { return HasFlag(Flags, FlagsToCheck); }
-	inline bool HasAllFlags(EObjectFlags FlagsToCheck) const { return (Flags & FlagsToCheck) == FlagsToCheck; } 
+	inline bool HasAllFlags(EObjectFlags FlagsToCheck) const { return (Flags & FlagsToCheck) == FlagsToCheck; }
 	inline EObjectFlags GetFlags() const { return Flags; }
-	EObjectFlags GetMaskedFlags(EObjectFlags Mask = EObjectFlags::RF_AllFlags) const{return EObjectFlags(GetFlags() & Mask);}
+	EObjectFlags GetMaskedFlags(EObjectFlags Mask = EObjectFlags::RF_AllFlags) const { return EObjectFlags(GetFlags() & Mask); }
+
+protected:
+	// StaticAllocateObject가 채운 값을 그대로 둔다. UE의 NoInit 생성자.
+	UObjectBase() : Name(NoInit) {}
+
+private:
+	UObjectBase(UClass* InClass, EObjectFlags InFlags, UObject* InOuter, FName InName)
+		: ClassPrivate(InClass), Outer(InOuter), Name(InName), Flags(InFlags) {
+	}
+
+	// 기본값을 두지 않는다. 있으면 생성자가 할당 때 넣은 값을 덮어쓴다.
+	UClass* ClassPrivate;
+	UObject* Outer;
+	FName Name;
+	EObjectFlags Flags;
+};
+
+class UObject : public UObjectBase
+{
+public:
+	UObject();
+	UObject(bool bRegister);
+	virtual ~UObject();
+
+	static UClass* StaticClass();
+
+	template <typename T>
+	bool IsA() const { return IsA(T::StaticClass()); }
+	bool IsA(const UClass* const Class) const;
+
+	uint32 GetUUID() const { return ObjectUUID; }
+	void SetUUID(uint32 Uid) { ObjectUUID = Uid; }
+
+	inline static void RegisterProperties(UClass* InClass) {};
+	inline static void RegisterFunctions(UClass* InClass) {};   // 추가
 
 	virtual void Serialize(FArchive& Ar);
 	virtual void Serialize(FStructuredArchive::FRecord Record);
@@ -134,12 +159,6 @@ private:
 
 	uint32 ObjectUUID;
 	uint32 InternalIndex;
-
-	FName Name = FName("None");
-	UObject* Outer = nullptr;
-	UClass* ClassPrivate = nullptr;
-
-	EObjectFlags Flags = EObjectFlags::RF_NoFlags;
 
 	bool bIsRegistered = true;
 };

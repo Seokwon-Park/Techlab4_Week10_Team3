@@ -10,7 +10,7 @@ enum class EObjectFlags : uint32
 	RF_ClassDefaultObject = 0x00000010, // 이 Object가 CDO인가?
 	RF_ArchetypeObject = 0x00000020,
 	RF_Transient = 0x00000040, // 직렬화 제외 플래그
-	RF_DefaultSubObject = 0x00040000,
+	RF_DefaultSubObject = 0x00040000, // DefaultSubObject인가?
 	RF_AllFlags = 0xffffffff, // 모든 플래그
 };
 

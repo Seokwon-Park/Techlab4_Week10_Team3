@@ -52,6 +52,7 @@ public:
 		, LimitSize(INT64_MAX)
 	{
 		SetIsLoading(true);
+		SetIsPersistent(bIsPersistent);
 	}
 
 	/** With this method it's possible to attach data behind some serialized data. */ 

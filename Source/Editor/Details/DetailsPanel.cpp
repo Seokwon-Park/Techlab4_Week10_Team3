@@ -819,6 +819,8 @@ namespace
 		return static_cast<uint32>(Value);
 	}
 
+	bool DrawPropertyRow(UObject* Object, void* Container, const FProperty& Property, ImFont* CustomFont);
+
 	// 프로퍼티 타입에 맞는 위젯 하나를 그린다. 값이 바뀌면 true
 	// UE도 FProperty는 위젯을 모르고, 에디터(PropertyEditor 모듈)가 CastField로 타입을 보고 위젯을 고른다.
 	bool DrawPropertyValue(UObject* Object, const FProperty& Property, void* ValuePtr, const char* Label, ImFont* CustomFont)
@@ -995,14 +997,49 @@ namespace
 			return false;
 		}
 
+		if (const FStructProperty* StructProperty = CastField<FStructProperty>(&Property))
+		{
+			// USTRUCT: 구조체의 프로퍼티를 한 단계 들여 그린다. 컨테이너가 객체가 아니라 이 멤버의 주소다.
+			ImGui::NewLine();
+			ImGui::Indent();
+			ImGui::PushID(Label);
+
+			TArray<const UStruct*> StructChain;
+			for (const UStruct* Struct = StructProperty->Struct; Struct; Struct = Struct->GetSuperStruct())
+			{
+				StructChain.Add(Struct);
+			}
+
+			bool bChanged = false;
+			for (auto It = StructChain.rbegin(); It != StructChain.rend(); ++It)
+			{
+				for (const FProperty* Member : (*It)->GetProperties())
+				{
+					if (!Member->HasAnyFlags(CPF_Edit))
+					{
+						continue;
+					}
+					const bool bReadOnly = Member->HasAnyFlags(CPF_EditConst);
+					if (bReadOnly) ImGui::BeginDisabled();
+					bChanged |= DrawPropertyRow(Object, ValuePtr, *Member, CustomFont);
+					if (bReadOnly) ImGui::EndDisabled();
+				}
+			}
+
+			ImGui::PopID();
+			ImGui::Unindent();
+			return bChanged;
+		}
+
 		ImGui::TextDisabled("(Unsupported %s)", Property.GetClass()->GetName());
 		return false;
 	}
 
-	// UClass에 등록된 프로퍼티 한 줄: 라벨과 값 위젯
-	void DrawProperty(UObject* Object, const FProperty& Property, ImFont* CustomFont)
+	// 프로퍼티 한 줄: 라벨과 값 위젯. 값이 바뀌면 true
+	// Container는 프로퍼티를 가진 메모리 (UObject 멤버면 객체, USTRUCT 멤버면 그 구조체 값)
+	bool DrawPropertyRow(UObject* Object, void* Container, const FProperty& Property, ImFont* CustomFont)
 	{
-		void* ValuePtr = Property.ContainerPtrToValuePtr(Object);
+		void* ValuePtr = Property.ContainerPtrToValuePtr(Container);
 		const FString Label = "##" + Property.Name;
 
 		const char* DisplayName = Property.Name.c_str();
@@ -1012,7 +1049,7 @@ namespace
 		const float AvailableWidth = ImGui::GetContentRegionAvail().x;
 		const float LabelWidth = AvailableWidth * 0.45f;
 
-		const bool bInline = !Property.IsA<FTransformProperty>() && AvailableWidth >= 260.0f && ImGui::CalcTextSize(DisplayName).x < LabelWidth;
+		const bool bInline = !Property.IsA<FTransformProperty>() && !Property.IsA<FStructProperty>() && AvailableWidth >= 260.0f && ImGui::CalcTextSize(DisplayName).x < LabelWidth;
 
 		ImGui::AlignTextToFramePadding();
 		ImGui::TextWrapped("%s", DisplayName);
@@ -1022,7 +1059,14 @@ namespace
 
 		ImGui::SetNextItemWidth(-1.0f);
 
-		if (DrawPropertyValue(Object, Property, ValuePtr, Label.c_str(), CustomFont))
+		return DrawPropertyValue(Object, Property, ValuePtr, Label.c_str(), CustomFont);
+	}
+
+	// UClass에 등록된 프로퍼티 한 줄. 구조체 멤버 하나가 바뀌어도 객체에는 바깥 프로퍼티(구조체)가 바뀌었다고 알린다.
+	// (UE는 FPropertyChangedEvent에 MemberProperty와 안쪽 Property를 따로 담는다)
+	void DrawProperty(UObject* Object, const FProperty& Property, ImFont* CustomFont)
+	{
+		if (DrawPropertyRow(Object, Object, Property, CustomFont))
 		{
 			Object->PostEditChangeProperty(Property);
 		}
