@@ -7,6 +7,7 @@
 #include "Render/LightRenderData.h"
 #include "Render/SceneLightResources.h"
 #include "Render/SceneRendering.h"
+#include "Render/GPUTimer.h"
 #include "Math/Matrix.h"
 #include <algorithm>
 #include <cmath>
@@ -36,6 +37,15 @@ struct FRenderStats
 	uint32 ShadowLightsSkippedNoCaster = 0;
 	uint32 ShadowCastersSkippedSmall = 0;
 	uint32 ShadowDepthDraws = 0;    // 언리얼 구조 ShadowDepths 패스에서 그린 그림자 맵 수
+
+	uint32 DecalCount = 0;
+	uint32 DecalsRendered = 0;
+	uint32 DecalDrawCalls = 0;
+	uint32 DecalItemsTested = 0;
+	uint32 DecalNarrowTested = 0;
+	uint32 DecalBroadTests = 0;
+	uint32 DecalOBBTreeTested = 0;
+	float DecalGPUMs = 0.0f;   // 데칼 패스의 GPU 시간. 몇 프레임 전 값이다.
 
 	uint32 CascadeViewsRedrawn = 0;
 	uint32 CascadeViewsCached = 0;
@@ -77,6 +87,9 @@ struct FSceneRenderData
 
 	TArray<FPerObjectConstants> ObjectConstants;
 	FSceneLightResources ViewLightResources;
+
+	// 뷰마다 따로 재야 하므로 프레임 사이에 유지되는 뷰 데이터에 둔다. ResetFrame에서 지우지 않는다.
+	FGPUTimer DecalGPUTimer;
 
 	FAmbientLightRenderData AmbientLight{};
 	FSkyLightRenderData SkyLight{};

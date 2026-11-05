@@ -1,6 +1,7 @@
 #include "EnginePCH.h"
 #include "Editor/ContentDrawer/ContentDrawerPanel.h"
 #include "Asset/AssetManager.h"
+#include "Asset/FbxImporter/FbxMeshBake.h"
 #include "Text/Font.h"
 #include "Editor/HitoriEd/EditorDragDrop.h"
 
@@ -99,6 +100,9 @@ void FContentDrawerPanel::OnRender()
 			fs::directory_iterator It(CurrentPath, IterateError);
 			const fs::directory_iterator End;
 
+			// 폴더를 열 때 멈추지 않도록 썸네일은 프레임당 하나씩 로드한다. 그동안은 파일 아이콘을 보여 준다.
+			bool bLoadedThumbnail = false;
+
 			for (; !IterateError && It != End; It.increment(IterateError))
 			{
 				const fs::path Path = It->path();
@@ -129,7 +133,18 @@ void FContentDrawerPanel::OnRender()
 				}
 				else // 파일인 경우
 				{
-					URenderAsset* Asset = UAssetManager::GetAssetByPath<URenderAsset>(PathString);
+					URenderAsset* Asset = UAssetManager::FindLoadedAsset(PathString);
+					if (!Asset && !bLoadedThumbnail)
+					{
+						// 메시는 썸네일로 쓰지 않으므로 드로어를 연 것만으로 로드하지 않는다
+						const EAssetType UnloadedType = UAssetManager::GetUnloadedAssetType(PathString);
+						if (UnloadedType == EAssetType::Texture || UnloadedType == EAssetType::Font)
+						{
+							Asset = UAssetManager::GetAssetByPath<URenderAsset>(PathString);
+							bLoadedThumbnail = true;
+						}
+					}
+
 					if (Asset && Asset->IsA<UTexture2D>())
 					{
 						TextureAsset = Cast<UTexture2D>(Asset);
@@ -179,10 +194,18 @@ void FContentDrawerPanel::OnRender()
 					{
 						CurrentPath /= Path.filename(); // 하위 폴더로 이동
 					}
+					
+					// TODO: UIEditor를 FAssetEditor 계열로 통합
 					else if (Path.extension() == ".widget" && OnOpenWidget)
 					{
 						OnOpenWidget(PathString);
 					}
+
+					else if ((Path.extension() == ".obj" || FFbxMeshBake::IsBakedPath(PathString)) && OnOpenMesh)
+					{
+						OnOpenMesh(PathString);
+					}
+					
 				}
 				// 파일 이름 표시
 				ImGui::TextWrapped("%s", FilenameString.c_str());

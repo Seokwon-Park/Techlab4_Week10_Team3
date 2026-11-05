@@ -19,7 +19,8 @@
 #include "Render/RenderGraph/RenderGraph.h"
 
 
-#include "Editor/EditorUI/EditorUI.h"
+#include "Editor/LevelEditor/LevelEditorTab.h"
+#include "Editor/AssetEditor/EditorManager.h"
 #include "Editor/OutputLog/OutputLogPanel.h"
 #include "Editor/Details/DetailsPanel.h"
 #include "Editor/EditorControls/EditorControlsPanel.h"
@@ -68,6 +69,7 @@ public:
 	void RenderGameFrame(FGameViewportClient* GameClient, const FSceneView& SceneView, const FSceneRenderOptions& RenderOptions, FSceneRenderer& SceneRenderer, bool bIsSIEMode = false);
 	// 네 View 결과와 ImGui를 메인 Swapchain 백버퍼에 합성한다. Present는 FEngineLoop가 한다.
 	void PresentFrame();
+	void RenderAssetEditor(FAssetEditor& AssetEditor);
 	void DeleteActor(AActor* Actor);
 	void DeleteComponent(UActorComponent* Component);
 
@@ -145,7 +147,7 @@ private:
 	FSwapchain* MainWindowSC = nullptr;
 	FRenderer* Renderer = nullptr;
 
-	TUniquePtr<FEditorUI> EditorUI;
+	TUniquePtr<FEditorManager> EditorManager;
 
 	TUniquePtr<FImGuiRenderer> ImGuiRenderer;
 	TUniquePtr<FGridRenderer> GridRenderer;
@@ -163,6 +165,7 @@ private:
 
 	UFont* SystemFont;
 
+	FLevelEditorTab* LevelEditorTab = nullptr;
 	FOutputLogPanel* OutputLogPanel = nullptr;
 
 	FDetailsPanel* DetailsPanel = nullptr;

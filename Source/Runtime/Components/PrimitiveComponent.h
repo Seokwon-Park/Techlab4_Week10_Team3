@@ -73,6 +73,7 @@ public:
 		return Data ? Data->AABB : Super::CalcLocalBounds();
 	}
 
+	virtual FPrimitiveSceneProxy* CreateSceneProxy();
 	FPrimitiveSceneProxy* GetSceneProxy() const { return SceneProxy; }
 
 	void MarkRenderStateDirty() override;
@@ -90,6 +91,8 @@ public:
 	bool bCastShadow = true;
 	UPROPERTY(EditAnywhere)
 	bool bReceiveShadow = true;
+	UPROPERTY(EditAnywhere)
+	bool bReceivesDecals = true;
 
 	// ---- 충돌 이벤트 (담당: C) ----
 	FComponentOverlapSignature OnComponentBeginOverlap;

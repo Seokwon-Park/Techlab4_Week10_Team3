@@ -97,17 +97,18 @@ bool UEditorEngine::Init()
 	Renderer = GetEngineLoop().GetRenderer();
 	FRenderDevice* RenderDevice = GetEngineLoop().GetRenderDevice();
 
-	EditorUI = MakeUnique<FEditorUI>();
-	EditorUI->Init();
+	EditorManager = MakeUnique<FEditorManager>(*this);
+	LevelEditorTab = &EditorManager->GetLevelEditorTab();
 
-	EditorUI->SetNewSceneCallback([this]() { CreateNewScene(); });
-	EditorUI->SetOpenSceneCallback([this]() { OpenScene(); });
-	EditorUI->SetSaveSceneCallback([this]() { SaveCurrentScene(); });
-	EditorUI->SetSaveSceneAsCallback([this]() { SaveSceneAs(); });
-	EditorUI->SetPackageGameCallback([this]() { Packager.Start("Release"); });
-	EditorUI->SetIsPackagingQuery([this]() { return Packager.IsRunning(); });
+	LevelEditorTab->OnNewScene.AddDynamic(this, &UEditorEngine::CreateNewScene);
+	LevelEditorTab->OnOpenScene.AddDynamic(this, &UEditorEngine::OpenScene);
+	LevelEditorTab->OnSaveScene.AddDynamic(this, &UEditorEngine::SaveCurrentScene);
+	LevelEditorTab->OnSaveSceneAs.AddDynamic(this, &UEditorEngine::SaveSceneAs);
+	LevelEditorTab->OnImportFbx.Add([this](EFbxImportMode Mode) { FEditorFileUtils::ImportFbx(Mode); });
+	LevelEditorTab->OnPackageGame.Add([this]() { Packager.Start("Release"); });
+	LevelEditorTab->SetIsPackagingQuery([this]() { return Packager.IsRunning(); });
 
-	OutputLogPanel = EditorUI->AddEditorPanel<FOutputLogPanel>();
+	OutputLogPanel = LevelEditorTab->AddPanel<FOutputLogPanel>();
 	FLog::AddSink(OutputLogPanel);
 	HTR_LOG(Info, "Editor Initialize...");
 
@@ -132,7 +133,7 @@ bool UEditorEngine::Init()
 
 	Gizmo = MakeUnique<FGizmo>();
 
-	DetailsPanel = EditorUI->AddEditorPanel<FDetailsPanel>();
+	DetailsPanel = LevelEditorTab->AddPanel<FDetailsPanel>();
 	DetailsPanel->SetImGuiRenderer(ImGuiRenderer.get());
 	DetailsPanel->SetShadowPreviewQuery([this](const ULightComponent* Light, FTexture2DArray*& Atlas,
 		TArray<FLightShadowRenderData>& Shadows)
@@ -155,9 +156,9 @@ bool UEditorEngine::Init()
 		});
 
 
-	EditorControlsPanel = EditorUI->AddEditorPanel<FEditorControlsPanel>();
-	ViewportsPanel = EditorUI->AddEditorPanel<FViewportsPanel>();
-	ContentDrawerPanel = EditorUI->AddEditorPanel<FContentDrawerPanel>();
+	EditorControlsPanel = LevelEditorTab->AddPanel<FEditorControlsPanel>();
+	ViewportsPanel = LevelEditorTab->AddPanel<FViewportsPanel>();
+	ContentDrawerPanel = LevelEditorTab->AddPanel<FContentDrawerPanel>();
 
 	// OutLine
 	OutlineRenderer = MakeUnique<FOutlineRenderer>();
@@ -168,13 +169,16 @@ bool UEditorEngine::Init()
 	CascadeFloorRenderer = MakeUnique<FCascadeFloorRenderer>();
 	CascadeFloorRenderer->Init();
 
-	SettingsPanel = EditorUI->AddEditorPanel<FSettingsPanel>();
-	SequencerPanel = EditorUI->AddEditorPanel<FSequencerPanel>();
+	SettingsPanel = LevelEditorTab->AddPanel<FSettingsPanel>();
+	SequencerPanel = LevelEditorTab->AddPanel<FSequencerPanel>();
 	OutputLogPanel->SetEditorSettings(&SettingsPanel->GetMutableSettings());
 
-	UIEditorPanel = EditorUI->AddEditorPanel<FUIEditorPanel>();
+	UIEditorPanel = LevelEditorTab->AddPanel<FUIEditorPanel>();
 	ContentDrawerPanel->SetCreateWidgetCallback([this](const FString& Path) { UIEditorPanel->NewAsset(Path); });
 	ContentDrawerPanel->SetOpenWidgetCallback([this](const FString& Path) { UIEditorPanel->OpenAsset(Path); });
+
+	// StaticMesh / SkeletalMesh Viewer 열기
+	ContentDrawerPanel->SetOpenMeshCallback([this](const FString& Path) { EditorManager->OpenEditor(Path); });
 
 	Outline = MakeUnique<FOutline>();
 
@@ -199,9 +203,7 @@ bool UEditorEngine::Init()
 		: ELayoutMode::QuadSplit;
 	EditorWorld->GetMainCamera()->GetCameraComponent()->SetExternalInputManaged(true);
 
-
-
-	OutlinerPanel = EditorUI->AddEditorPanel<FOutlinerPanel>();
+	OutlinerPanel = LevelEditorTab->AddPanel<FOutlinerPanel>();
 	OutlinerPanel->SetWorld(GetActiveWorld());
 	OutlinerPanel->SetSelectionCallback(
 		[this](USceneComponent* Root)
@@ -321,13 +323,12 @@ bool UEditorEngine::Init()
 	Stop.CanExecute = [this]()->bool {return PlayWorld; };
 	Stop.Execute = [this]() { RequestEndPlayMap(); };
 
-	EditorUI->GetToolbar()->SetCommands({ Play, Pause, Resume, StepFrame, Stop });
-	EditorUI->GetToolbar()->SetPlayModeBinding(
+	FLevelEditorToolbar& LevelEditorToolbar = *LevelEditorTab->GetToolbar();
+	LevelEditorToolbar.SetCommands({ Play, Pause, Resume, StepFrame, Stop });
+	LevelEditorToolbar.SetPlayModeBinding(
 		[this]() { return PlayMode; },
 		[this](EPlayModeType Mode) { PlayMode = Mode; },
 		[this]() { return !IsPlaying(); });
-
-	FLuaScriptManager::Get().GetState().script("print('hello', 1 + 2, nil)");
 
 	return true;
 }
@@ -367,7 +368,9 @@ void UEditorEngine::Tick(const float DeltaTime)
 		AudioDevice->Update(!bIsPaused);
 	}
 	RenderViewports();
+	EditorManager->RenderPreview();
 	EndFrame();
+	EditorManager->LateTick();
 }
 
 void UEditorEngine::PreLoadMap(FWorldContext& Context)
@@ -552,7 +555,7 @@ void UEditorEngine::TickWorldAndEditor(const float DeltaTime)
 	}
 	{
 		SCOPE_CYCLE_COUNTER(STAT_EditorTick);
-		EditorUI->Tick(DeltaTime);
+		EditorManager->Tick(DeltaTime);
 	}
 	UpdateGizmoAndPicking();
 	EditorWorld->GetScene().UpdateAllTransforms();
@@ -903,6 +906,7 @@ void UEditorEngine::BuildSceneRenderOptions(FGameViewportClient* ViewClient, FSc
 	Options.DisplayGamma = S.DisplayGamma;
 	Options.bShowVignette = S.bShowVignette;
 	Options.bShowCameraOverlay = S.bShowCameraOverlay;
+	Options.bShowSkeletalMesh = S.bShowSkeletalMesh;
 }
 
 void UEditorEngine::BuildSceneRenderOptions(FEditorViewportClient* ViewClient, bool IsPIE, FSceneRenderOptions& Options)
@@ -927,6 +931,7 @@ void UEditorEngine::BuildSceneRenderOptions(FEditorViewportClient* ViewClient, b
 	Options.DisplayGamma = S.DisplayGamma;
 	Options.bShowVignette = S.bShowVignette;
 	Options.bShowCameraOverlay = S.bShowCameraOverlay;
+	Options.bShowSkeletalMesh = S.bShowSkeletalMesh;
 
 	Options.bDrawPrimitives = IsPIE || SettingsPanel->GetSettings().bDrawPrimitives;
 	Options.bEnableFog = ViewClient->GetViewportMode() == EViewportMode::Solid;
@@ -936,6 +941,11 @@ void UEditorEngine::BuildSceneRenderOptions(FEditorViewportClient* ViewClient, b
 	Options.bShowWorldNormal = !IsPIE && ViewClient->IsWorldNormal();
 	Options.bShowLightCulling = !IsPIE && ViewClient->IsLightCulling();
 	Options.SceneDepthRange = ViewClient->GetMaxRange();
+	Options.bDrawDecals = S.bDrawDecals;
+	Options.bDecalCulling = S.bDecalCulling;
+	Options.bDecalNarrowCulling = S.bDecalNarrowCulling;
+	Options.bDecalBVHCulling = S.bDecalBVHCulling;
+	Options.bDecalOBBTree = S.bDecalOBBTree;
 }
 
 // 게임 뷰포트 화면을 렌더링한다
@@ -982,6 +992,64 @@ void UEditorEngine::RenderGameFrame(FGameViewportClient* GameClient, const FScen
 				};
 		});
 	if (!bRendered) return;
+}
+
+void UEditorEngine::RenderAssetEditor(FAssetEditor& AssetEditor)
+{
+	FEditorViewportClient& ViewClient = *AssetEditor.GetViewportClient();
+	UWorld* World = ViewClient.GetWorld();
+
+	// 렌더러가 없음
+	if (!Renderer)
+	{
+		return;
+	}
+
+	// EditorViewportClient에 월드가 없음
+	if (!World)
+	{
+		return;
+	}
+
+	// 월드 타입이 EditorPreview가 아님
+	if (World->GetWorldType() != EWorldType::EditorPreview)
+	{
+		return;
+	}
+
+	// SceneView와 Option 생성
+	FSceneView View = ViewClient.CalcSceneView();
+	FSceneRenderOptions Options
+	{
+		.bEnableFog = false,
+		.bEnableFXAA = true,
+		.bShowVignette = false,
+		.bShowCameraOverlay = false,
+	};
+
+	// SceneRenderer 생성 및 초기화
+	FSceneRenderer SceneRenderer(World, View, ViewClient.GetRenderData());
+	SceneRenderer.InitViews(Renderer, Options);
+
+	// PreviewViewport 그리기
+	SceneRenderer.Render(Renderer, ViewClient.GetViewTargets(), Options,
+		[&](FScenePassCallbacks& Callbacks)
+		{
+			// TODO: 지금은 EditorGizmo 슬롯에 들어있지만
+			// 추후 AssetEditor 전용 Gizmo 슬롯을 만들어서 그쪽으로 옮기는 게 좋을 듯
+			Callbacks.Overlays.EditorGizmo = [&]
+			{
+				LineBatcher->BeginFrame();
+				AssetEditor.OnRenderLine(*LineBatcher);
+				LineBatcher->OnRender(View.ViewProjectionMatrix);
+
+				if (const FGizmo* PreviewGizmo = AssetEditor.GetPreviewGizmo())
+				{
+					GizmoRenderer->OnRender(*PreviewGizmo, View.ViewProjectionMatrix,
+						View.ViewLocation, !View.bIsPerspective);
+				}
+			};
+		});
 }
 
 bool UEditorEngine::RenderScene(FSceneViewTargets& Targets, const FSceneView& SceneView,
@@ -1124,7 +1192,8 @@ void UEditorEngine::RenderFrame(FEditorViewportClient* ViewClient,
 			const bool bDrawSelectedLight = bIsActiveViewport && Gizmo->GetTarget() &&
 				(Cast<ASpotLightActor>(Gizmo->GetTarget()->GetOwner()) ||
 					Cast<APointLightActor>(Gizmo->GetTarget()->GetOwner()) ||
-					Cast<ARectLightActor>(Gizmo->GetTarget()->GetOwner()));
+					Cast<ARectLightActor>(Gizmo->GetTarget()->GetOwner()) ||
+					Cast<ADecalActor>(Gizmo->GetTarget()->GetOwner()));
 
 			const bool bDrawCascadeBounds = SettingsPanel->GetSettings().bDrawCascadeBounds;
 			{
@@ -1161,6 +1230,7 @@ void UEditorEngine::RenderFrame(FEditorViewportClient* ViewClient,
 						{
 							LineBatcher->BuildVertexBuffer();
 						}
+						
 						if (bDrawSelectedLight)
 						{
 							if (ASpotLightActor* Light = Cast<ASpotLightActor>(Gizmo->GetTarget()->GetOwner()))
@@ -1169,6 +1239,8 @@ void UEditorEngine::RenderFrame(FEditorViewportClient* ViewClient,
 								Light->GetPointLightComponent()->DrawDebug(LineBatcher.get());
 							else if (ARectLightActor* Light = Cast<ARectLightActor>(Gizmo->GetTarget()->GetOwner()))
 								Light->GetRectLightComponent()->DrawDebug(LineBatcher.get());
+							else if (ADecalActor* Decal = Cast<ADecalActor>(Gizmo->GetTarget()->GetOwner()))
+								Decal->GetDecalComponent()->DrawDebug(LineBatcher.get());
 						}
 
 						const AActor* SelectedActor =
@@ -1232,7 +1304,7 @@ void UEditorEngine::PresentFrame()
 
 		ImGuiRenderer->Begin();
 
-		EditorUI->OnRender();
+		EditorManager->DrawEditorUI();
 
 		ImGuiRenderer->End();
 	}
@@ -1253,6 +1325,26 @@ void UEditorEngine::PreExit()
 	EditorWorld->ClearWorld();
 	// PIE 창이 열린 채 종료하면 Device가 살아 있을 때 Swapchain과 타깃을 먼저 정리한다.
 	DestroyPIEWindow();
+
+	// 레벨 패널을 마지막으로 사용한 뒤 탭을 파괴하고 빌린 참조를 비운다.
+	FLog::RemoveSink(OutputLogPanel);
+	if (EditorManager)
+	{
+		EditorManager->Shutdown();
+	}
+
+	LevelEditorTab = nullptr;
+	OutputLogPanel = nullptr;
+	DetailsPanel = nullptr;
+	EditorControlsPanel = nullptr;
+	SettingsPanel = nullptr;
+	SequencerPanel = nullptr;
+	ViewportsPanel = nullptr;
+	ContentDrawerPanel = nullptr;
+	UIEditorPanel = nullptr;
+	OutlinerPanel = nullptr;
+	AllViewportClients.Empty();
+
 	ImGuiRenderer->Shutdown();
 }
 
@@ -1491,6 +1583,7 @@ void UEditorEngine::CreateNewScene()
 		return;
 
 	ResetSceneSelection();
+	LevelEditorTab->OnLevelLoaded.Broadcast(FEditorFileUtils::CurrentScenePath);
 }
 
 // 씬 불러오기가 성공하면 에디터 선택 상태를 초기화한다.
@@ -1505,6 +1598,8 @@ void UEditorEngine::OpenScene()
 		return;
 
 	ResetSceneSelection();
+
+	LevelEditorTab->OnLevelLoaded.Broadcast(FEditorFileUtils::CurrentScenePath);
 }
 
 // 공통 파일 유틸리티로 현재 씬을 저장한다.

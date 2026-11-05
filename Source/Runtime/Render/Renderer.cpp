@@ -9,6 +9,8 @@
 #include "Render/PostProcess/HeightFogRenderer.h"
 #include "Render/PostProcess/FXAARenderer.h"
 #include "Render/PostProcess/ToneMapData.h"
+#include "Render/DecalData.h"
+
 #include "Render/PostProcess/CameraOverlayRenderer.h"
 #include "Text/TextRenderer.h"
 
@@ -45,7 +47,9 @@ void FRenderer::BindBatch(const FMeshDrawBatch& Batch)
 	
 	RenderCommand::BindVertexBuffer(Batch.VertexBuffer);
 	RenderCommand::BindIndexBuffer(Batch.IndexBuffer);
-	
+	if (Batch.BoneBuffer)
+		RenderCommand::BindShaderResource(BoneMatrixBufferSlot, Batch.BoneBuffer, EShaderBindFlagBits::Vertex);
+
 	if (Batch.bBindViewConstants)
 		RenderCommand::BindConstantBuffer(0, ViewCB.get(), EShaderBindFlagBits::Vertex);
 	for (uint32 Index = 0; Index < Batch.Textures.Num(); ++Index)
@@ -145,6 +149,7 @@ void FRenderer::InitScenePasses(const FString& SkyPanoramaPath)
 	CameraOverlay = MakeUnique<FCameraOverlayRenderer>();   // FXAA->Init(this); 아래
 	CameraOverlay->Init(this);
 	ToneMapConstants = RenderCommand::CreateConstantBuffer(sizeof(FToneMapData));
+	DecalConstants = RenderCommand::CreateConstantBuffer(sizeof(FDecalData));
 	SceneText = MakeUnique<FTextRenderer>();
 	SceneText->Init();
 }

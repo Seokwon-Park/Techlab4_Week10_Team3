@@ -6,7 +6,8 @@
 #include "Engine/Scene.h"
 
 FPrimitiveSceneProxy::FPrimitiveSceneProxy(UPrimitiveComponent* InComponent)
-    : Component(InComponent), bCastsShadow(InComponent->bCastShadow), bReceiveShadow(InComponent->bReceiveShadow) 
+    : Component(InComponent), bCastsShadow(InComponent->bCastShadow), 
+    bReceiveShadow(InComponent->bReceiveShadow), bReceivesDecals(InComponent->bReceivesDecals)
 {
 }
 
@@ -30,6 +31,20 @@ void FPrimitiveSceneProxy::OnMeshDestroyed()
     RenderState.reset();
 }
 
+void FPrimitiveSceneProxy::UpdateCommonFlags()
+{
+    bVisible = Component->IsShown(false);
+    bHiddenInGame = !Component->IsShown(true);
+    bCastsShadow = Component->bCastShadow;
+    bReceiveShadow = Component->bReceiveShadow;
+	bReceivesDecals = Component->bReceivesDecals;
+}
+
+void FPrimitiveSceneProxy::GetDynamicMeshElements(FRenderQueue& Queue, const FViewContext& View)
+{
+    Component->SubmitToRenderQueue(Queue,View);
+}
+
 void FPrimitiveSceneProxy::UpdateTransform()
 {
     LocalToWorld = Component->GetWorldMatrix();
@@ -44,10 +59,7 @@ void FPrimitiveSceneProxy::UpdateRenderState()
     UStaticMesh* PreviousMesh = Mesh;
     Mesh = nullptr;
     RenderState.reset();
-    bVisible = Component->IsShown(false);
-    bHiddenInGame = !Component->IsShown(true);
-    bCastsShadow = Component->bCastShadow;
-    bReceiveShadow = Component->bReceiveShadow;
+    UpdateCommonFlags();
     UStaticMeshComponent* StaticMeshComponent = Cast<UStaticMeshComponent>(Component);
     if (StaticMeshComponent) Mesh = StaticMeshComponent->GetStaticMesh();
     if (Mesh != PreviousMesh)

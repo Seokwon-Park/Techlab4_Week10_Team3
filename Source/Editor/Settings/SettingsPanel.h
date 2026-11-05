@@ -26,6 +26,11 @@ struct FEditorSettings
 	bool bDrawCascadeBounds = false;
 	bool bDrawPSGrid = false;
 	bool bEnableFXAA = false;
+	bool bDrawDecals = true;
+	bool bDecalCulling = true;
+	bool bDecalNarrowCulling = true;
+	bool bDecalBVHCulling = true;
+	bool bDecalOBBTree = true;
 	ELightCullingMode LightCullingMode = ELightCullingMode::Tiled;
 	ERenderingPath RenderingPath = ERenderingPath::Deferred;
 	ELightingModel LightingModel = ELightingModel::Gouraud;
@@ -62,6 +67,7 @@ struct FEditorSettings
 	float DisplayGamma = 2.2f;
 	bool bShowVignette = true;
 	bool bShowCameraOverlay = true;
+	bool bShowSkeletalMesh = true;
 
 	inline uint32 GetDirectionalShadowMapSize() const { return DirectionalShadowMapSizePerLevels[DirectionalShadowMapSizeLevel]; }
 	inline uint32 GetPointShadowMapSize() const { return PointShadowMapSizePerLevels[PointShadowMapSizeLevel]; }

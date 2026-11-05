@@ -3,7 +3,8 @@
 //#include "Engine/GameEngine.h"
 //#include "Engine/World.h"
 //
-//#include "Editor/EditorUI/EditorUI.h"
+//#include "Editor/EditorUI/EditorTabContainer.h"
+//#include "Editor/LevelEditor/LevelEditorTab.h"
 //#include "Editor/Gizmo/Gizmo.h"
 //#include "Editor/Gizmo/GizmoRenderer.h"
 //#include "Editor/Rendering/GridRenderer.h"
@@ -44,8 +45,9 @@
 //
 //	TUniquePtr<FImGuiRenderer> ImGuiRenderer;
 //
-//	// 패널 소유권은 EditorUI에 있고 여기서는 raw pointer만 보관한다.
-//	TUniquePtr<FEditorUI> EditorUI;
+//	// 레벨 탭이 패널을 소유하고 컨테이너는 탭을 참조한다.
+//	TUniquePtr<FLevelEditorTab> LevelEditorTab;
+//	FEditorTabContainer TabContainer;
 //	FOutlinerPanel* OutlinerPanel = nullptr;
 //	FDetailsPanel* DetailsPanel = nullptr;
 //	FEditorControlsPanel* EditorControlsPanel = nullptr;

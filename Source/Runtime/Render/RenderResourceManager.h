@@ -30,6 +30,8 @@ enum class EPSOType : uint8
 	ShadowDepth,
 	ShadowProjection,        // 그림자 한 장을 화면 마스크(ScreenShadowMask)에 그린다
 	ShadowMaskVisualize,     // Shadow Mask 뷰 모드: 마스크를 화면에 띄운다
+	Decal, 
+	DecalAdditive,
 	Count
 };
 
@@ -54,10 +56,10 @@ public:
 
 	static FPipelineState* GetPSO(const EPSOType& InType);
 	static FShaderProgram* GetForwardShaderProgram(ELightingModel Model);
-	static FShaderProgram* GetShadowDepthShaderProgram();
 private:
 	
 	void LoadOrCompileShader(const FString& Path);
+	void CreateSkinnedVariant(const FString& Path, const char* LightingMacro, const FShaderProgram& Base);
 	void InitPipelineStates();
 
 	TMap<FString, TUniquePtr<FVertexShader>> VertexShaderMap;

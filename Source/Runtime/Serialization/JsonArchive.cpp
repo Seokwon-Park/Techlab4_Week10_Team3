@@ -30,6 +30,7 @@ bool FJsonArchive::SaveWorldToBytes(UWorld* World, TArray<uint8>& OutBytes)
 		return false;
 
 	FMemoryWriter Writer(OutBytes);
+	Writer.SetIsPersistent(true);   // 파일에는 Transient를 쓰지 않는다
 	{
 		// 선언 순서 = 소멸 역순: Ar(Close) → Formatter(dump → Writer)
 		FJsonArchiveOutputFormatter Formatter(Writer);
@@ -51,7 +52,7 @@ bool FJsonArchive::LoadWorldFromBytes(UWorld* World, const TArray<uint8>& Bytes)
 	if (!World)
 		return false;
 
-	FMemoryReader Reader(Bytes);
+	FMemoryReader Reader(Bytes, true);
 	FJsonArchiveInputFormatter Formatter(Reader);   
 	if (Reader.IsError())
 	{

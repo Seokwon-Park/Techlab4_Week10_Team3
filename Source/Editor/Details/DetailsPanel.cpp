@@ -6,6 +6,7 @@
 #include "Editor/HitoriEd/EditorDragDrop.h"
 #include "Components/PrimitiveComponent.h"
 #include "Components/StaticMeshComponent.h"
+#include "Components/SkinnedMeshComponent.h"
 #include "Components/TextRenderComponent.h"
 #include "Components/ParticleSubUVComponent.h"
 #include "Components/SpotLightComponent.h"
@@ -334,8 +335,68 @@ namespace
 				if (bSelected)
 					ImGui::SetItemDefaultFocus();
 			}
+
+			// 아직 로드되지 않은 폰트는 경로만 보여 주고 고를 때 로드한다
+			for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::Font))
+			{
+				ImGui::PushID(ItemPath.c_str());
+				if (ImGui::Selectable(GetAssetDisplayName(ItemPath).c_str(), false))
+				{
+					if (UFont* Font = UAssetManager::GetAssetByPath<UFont>(ItemPath))
+					{
+						if (UTextRenderComponent* TextComponent = Cast<UTextRenderComponent>(Owner))
+							TextComponent->SetFont(Font);
+						else
+							*FontPtr = Font;
+					}
+				}
+				if (ImGui::IsItemHovered())
+				{
+					ImGui::SetTooltip("%s", ItemPath.c_str());
+				}
+				ImGui::PopID();
+			}
 			ImGui::EndCombo();
 		}
+	}
+
+	void DrawSkeletalMeshSlot(USkinnedMeshComponent* Component)
+	{
+		USkeletalMesh* Current = Component->GetSkeletalMesh();
+		const FString CurrentPath = Current ? Current->GetPath() : "";
+		const FString CurrentName = Current ? (CurrentPath.empty() ? Current->GetName() : GetAssetDisplayName(CurrentPath)) : "None";
+		ImGui::SetNextItemWidth(-1.0f);
+		const bool bOpen = ImGui::BeginCombo("##SkeletalMesh", CurrentName.c_str());
+		if (ImGui::IsItemHovered() && Current) ImGui::SetTooltip("%s", CurrentPath.c_str());
+		if (!bOpen) return;
+		if (ImGui::Selectable("None", Current == nullptr)) Component->SetSkeletalMesh(nullptr);
+		for (TObjectIterator<USkeletalMesh> Itr; Itr; ++Itr)
+		{
+			const FString Path = Itr->GetPath();
+			if (Path.empty()) continue;
+			const bool bSelected = *Itr == Current;
+			ImGui::PushID(*Itr);
+			if (ImGui::Selectable(GetAssetDisplayName(Path).c_str(), bSelected)) Component->SetSkeletalMesh(*Itr);
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", Path.c_str());
+			if (bSelected) ImGui::SetItemDefaultFocus();
+			ImGui::PopID();
+		}
+
+		// 아직 로드되지 않은 메시는 경로만 보여 주고 고를 때 로드한다
+		for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::SkeletalMesh))
+		{
+			ImGui::PushID(ItemPath.c_str());
+			if (ImGui::Selectable(GetAssetDisplayName(ItemPath).c_str(), false))
+			{
+				if (USkeletalMesh* Mesh = UAssetManager::GetAssetByPath<USkeletalMesh>(ItemPath))
+				{
+					Component->SetSkeletalMesh(Mesh);
+				}
+			}
+			if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ItemPath.c_str());
+			ImGui::PopID();
+		}
+		ImGui::EndCombo();
 	}
 
 	void DrawMeshSlot(UObject* Owner, UStaticMesh** StaticMeshPtr)
@@ -381,6 +442,27 @@ namespace
 				if (bSelected)
 					ImGui::SetItemDefaultFocus();
 			}
+
+			// 아직 로드되지 않은 메시는 경로만 보여 주고 고를 때 로드한다
+			for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::StaticMesh))
+			{
+				ImGui::PushID(ItemPath.c_str());
+				if (ImGui::Selectable(GetAssetDisplayName(ItemPath).c_str(), false))
+				{
+					if (UStaticMesh* Mesh = UAssetManager::GetAssetByPath<UStaticMesh>(ItemPath))
+					{
+						if (UStaticMeshComponent* MeshComponent = Cast<UStaticMeshComponent>(Owner))
+							MeshComponent->SetStaticMesh(Mesh);
+						else
+							*StaticMeshPtr = Mesh;
+					}
+				}
+				if (ImGui::IsItemHovered())
+				{
+					ImGui::SetTooltip("%s", ItemPath.c_str());
+				}
+				ImGui::PopID();
+			}
 			ImGui::EndCombo();
 		}
 	}
@@ -418,6 +500,118 @@ namespace
 		return true;
 	}
 
+	bool DrawTexturePicker(UTexture2D* Current, const char* Label,
+		const std::function<void(UTexture2D*)>& OnPick)
+	{
+		const float ThumbnailSize{ 64.0f };
+		const float ItemThumbnailSize{ 24.0f };
+
+		bool bChanged{ false };
+
+		if (Current && Current->GetResource())
+		{
+			ImGui::Image((ImTextureID)Current->GetResource()->GetSRV(), { ThumbnailSize, ThumbnailSize });
+			if (ImGui::IsItemHovered())
+			{
+				ImGui::SetTooltip("%s", Current->GetPath().c_str());
+			}
+		}
+		else
+		{
+			ImGui::Button("Empty", { ThumbnailSize, ThumbnailSize });
+		}
+
+		if (ImGui::BeginDragDropTarget())
+		{
+			if (const ImGuiPayload * Payload{ ImGui::AcceptDragDropPayload(EditorDragDrop::Texture) })
+			{
+				UTexture2D* DroppedTexture{ *static_cast<UTexture2D**>(Payload->Data) };
+				if (DroppedTexture != Current)
+				{
+					OnPick(DroppedTexture);
+					bChanged = true;
+				}
+			}
+			ImGui::EndDragDropTarget();
+		}
+
+		const FString CurrentPath{ Current ? Current->GetPath() : "" };
+		const FString CurrentFileName{ Current ? GetAssetDisplayName(CurrentPath) : "None" };
+
+		ImGui::SetNextItemWidth(-1.0f);
+		const bool bOpen{ ImGui::BeginCombo(Label, CurrentFileName.c_str()) };
+		if (ImGui::IsItemHovered() && Current)
+		{
+			ImGui::SetTooltip("%s", CurrentPath.c_str());
+		}
+
+		if (bOpen)
+		{
+			if (ImGui::Selectable("None", Current == nullptr) && Current != nullptr)
+			{
+				OnPick(nullptr);
+				bChanged = true;
+			}
+
+			// 경로 없는 런타임 텍스처(렌더타겟 등)는 목록에서 뺀다.
+			for (TObjectIterator<UTexture2D> Iterator{}; Iterator; ++Iterator)
+			{
+				UTexture2D* ItemTexture{ *Iterator };
+				if (!ItemTexture->GetResource() || ItemTexture->GetPath().empty())
+				{
+					continue;
+				}
+
+				const bool bSelected{ ItemTexture == Current };
+				const FString ItemPath{ ItemTexture->GetPath() };
+				const FString ItemFileName{ GetAssetDisplayName(ItemPath) };
+
+				ImGui::PushID(ItemTexture);
+				ImGui::Image((ImTextureID)ItemTexture->GetResource()->GetSRV(), { ItemThumbnailSize, ItemThumbnailSize });
+				ImGui::SameLine();
+				if (ImGui::Selectable(ItemFileName.c_str(), bSelected, ImGuiSelectableFlags_None, { 0.0f, ItemThumbnailSize })
+					&& !bSelected)
+				{
+					OnPick(ItemTexture);
+					bChanged = true;
+				}
+				if (ImGui::IsItemHovered())
+				{
+					ImGui::SetTooltip("%s", ItemPath.c_str());
+				}
+				if (bSelected)
+				{
+					ImGui::SetItemDefaultFocus();
+				}
+				ImGui::PopID();
+			}
+
+			// 아직 로드되지 않은 텍스처는 썸네일 없이 경로만 보여 주고 고를 때 로드한다
+			for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::Texture))
+			{
+				ImGui::PushID(ItemPath.c_str());
+				ImGui::Dummy({ ItemThumbnailSize, ItemThumbnailSize });
+				ImGui::SameLine();
+				if (ImGui::Selectable(GetAssetDisplayName(ItemPath).c_str(), false, ImGuiSelectableFlags_None, { 0.0f, ItemThumbnailSize }))
+				{
+					if (UTexture2D* ItemTexture{ UAssetManager::GetAssetByPath<UTexture2D>(ItemPath) })
+					{
+						OnPick(ItemTexture);
+						bChanged = true;
+					}
+				}
+				if (ImGui::IsItemHovered())
+				{
+					ImGui::SetTooltip("%s", ItemPath.c_str());
+				}
+				ImGui::PopID();
+			}
+			ImGui::EndCombo();
+		}
+
+		return bChanged;
+	}
+
 	void DrawMaterialTextureSlot(UMeshComponent* MeshComponent, int32 MaterialSlot, int32 TextureSlot, const char* Label, UMaterial*& Effective, UMaterial*& Override) {
 		const float ThumbnailSize{ 64.0f };
 		const float ItemThumbnailSize{ 24.0f };
@@ -429,64 +623,11 @@ namespace
 		ImGui::TableSetColumnIndex(1);
 		ImGui::PushID(TextureSlot);
 
-		if (Texture && Texture->GetResource()) {
-			ImGui::Image((ImTextureID)Texture->GetResource()->GetSRV(), { ThumbnailSize, ThumbnailSize });
-			if (ImGui::IsItemHovered()) {
-				ImGui::SetTooltip("%s", Texture->GetPath().c_str());
-			}
-		}
-		else {
-			ImGui::Button("Empty", { ThumbnailSize, ThumbnailSize });
-		}
-
-		if (ImGui::BeginDragDropTarget()) {
-			if (const ImGuiPayload * Payload{ ImGui::AcceptDragDropPayload(EditorDragDrop::Texture) }) {
-				UTexture2D* DroppedTexture{ *static_cast<UTexture2D**>(Payload->Data) };
-				if (SetMaterialTexture(MeshComponent, MaterialSlot, TextureSlot, DroppedTexture, Effective, Override)) {
-					Texture = DroppedTexture;
-				}
-			}
-			ImGui::EndDragDropTarget();
-		}
-
-		const FString CurrentPath{ Texture ? Texture->GetPath() : "" };
-		const FString CurrentFileName{ Texture ? GetAssetDisplayName(CurrentPath) : "None" };
-		ImGui::SetNextItemWidth(-1.0f);
-		const bool Open{ ImGui::BeginCombo("##Texture", CurrentFileName.c_str()) };
-		if (ImGui::IsItemHovered() && Texture) {
-			ImGui::SetTooltip("%s", CurrentPath.c_str());
-		}
-
-		if (Open) {
-			if (ImGui::Selectable("None", Texture == nullptr)) {
-				SetMaterialTexture(MeshComponent, MaterialSlot, TextureSlot, nullptr, Effective, Override);
-			}
-
-			for (TObjectIterator<UTexture2D> Iterator{}; Iterator; ++Iterator) {
-				UTexture2D* ItemTexture{ *Iterator };
-				if (!ItemTexture->GetResource() || ItemTexture->GetPath().empty()) {
-					continue;
-				}
-
-				const bool Selected{ ItemTexture == Texture };
-				const FString ItemPath{ ItemTexture->GetPath() };
-				const FString ItemFileName{ GetAssetDisplayName(ItemPath) };
-				ImGui::PushID(ItemTexture);
-				ImGui::Image((ImTextureID)ItemTexture->GetResource()->GetSRV(), { ItemThumbnailSize, ItemThumbnailSize });
-				ImGui::SameLine();
-				if (ImGui::Selectable(ItemFileName.c_str(), Selected, ImGuiSelectableFlags_None, { 0.0f, ItemThumbnailSize })) {
-					SetMaterialTexture(MeshComponent, MaterialSlot, TextureSlot, ItemTexture, Effective, Override);
-				}
-				if (ImGui::IsItemHovered()) {
-					ImGui::SetTooltip("%s", ItemPath.c_str());
-				}
-				if (Selected) {
-					ImGui::SetItemDefaultFocus();
-				}
-				ImGui::PopID();
-			}
-			ImGui::EndCombo();
-		}
+		DrawTexturePicker(Texture, "##Texture",
+			[&](UTexture2D* Picked)
+			{
+				SetMaterialTexture(MeshComponent, MaterialSlot, TextureSlot, Picked, Effective, Override);
+			});
 
 		ImGui::PopID();
 	}
@@ -678,6 +819,8 @@ namespace
 		return static_cast<uint32>(Value);
 	}
 
+	bool DrawPropertyRow(UObject* Object, void* Container, const FProperty& Property, ImFont* CustomFont);
+
 	// 프로퍼티 타입에 맞는 위젯 하나를 그린다. 값이 바뀌면 true
 	// UE도 FProperty는 위젯을 모르고, 에디터(PropertyEditor 모듈)가 CastField로 타입을 보고 위젯을 고른다.
 	bool DrawPropertyValue(UObject* Object, const FProperty& Property, void* ValuePtr, const char* Label, ImFont* CustomFont)
@@ -845,17 +988,58 @@ namespace
 			{
 				DrawMeshSlot(Object, reinterpret_cast<UStaticMesh**>(ObjPtr));
 			}
+			else if (PropertyClass == UTexture2D::StaticClass())
+			{
+				UTexture2D** TexturePtr = reinterpret_cast<UTexture2D**>(ObjPtr);
+				return DrawTexturePicker(*TexturePtr, Label,
+					[TexturePtr](UTexture2D* Picked) { *TexturePtr = Picked; });
+			}
 			return false;
+		}
+
+		if (const FStructProperty* StructProperty = CastField<FStructProperty>(&Property))
+		{
+			// USTRUCT: 구조체의 프로퍼티를 한 단계 들여 그린다. 컨테이너가 객체가 아니라 이 멤버의 주소다.
+			ImGui::NewLine();
+			ImGui::Indent();
+			ImGui::PushID(Label);
+
+			TArray<const UStruct*> StructChain;
+			for (const UStruct* Struct = StructProperty->Struct; Struct; Struct = Struct->GetSuperStruct())
+			{
+				StructChain.Add(Struct);
+			}
+
+			bool bChanged = false;
+			for (auto It = StructChain.rbegin(); It != StructChain.rend(); ++It)
+			{
+				for (const FProperty* Member : (*It)->GetProperties())
+				{
+					if (!Member->HasAnyFlags(CPF_Edit))
+					{
+						continue;
+					}
+					const bool bReadOnly = Member->HasAnyFlags(CPF_EditConst);
+					if (bReadOnly) ImGui::BeginDisabled();
+					bChanged |= DrawPropertyRow(Object, ValuePtr, *Member, CustomFont);
+					if (bReadOnly) ImGui::EndDisabled();
+				}
+			}
+
+			ImGui::PopID();
+			ImGui::Unindent();
+			return bChanged;
 		}
 
 		ImGui::TextDisabled("(Unsupported %s)", Property.GetClass()->GetName());
 		return false;
 	}
 
-	// UClass에 등록된 프로퍼티 한 줄: 라벨과 값 위젯
-	void DrawProperty(UObject* Object, const FProperty& Property, ImFont* CustomFont)
+	// 프로퍼티 한 줄: 라벨과 값 위젯. 값이 바뀌면 true
+	// Container는 프로퍼티를 가진 메모리 (UObject 멤버면 객체, USTRUCT 멤버면 그 구조체 값)
+	bool DrawPropertyRow(UObject* Object, void* Container, const FProperty& Property, ImFont* CustomFont)
 	{
-		void* ValuePtr = Property.ContainerPtrToValuePtr(Object);
+		void* ValuePtr = Property.ContainerPtrToValuePtr(Container);
 		const FString Label = "##" + Property.Name;
 
 		const char* DisplayName = Property.Name.c_str();
@@ -865,7 +1049,7 @@ namespace
 		const float AvailableWidth = ImGui::GetContentRegionAvail().x;
 		const float LabelWidth = AvailableWidth * 0.45f;
 
-		const bool bInline = !Property.IsA<FTransformProperty>() && AvailableWidth >= 260.0f && ImGui::CalcTextSize(DisplayName).x < LabelWidth;
+		const bool bInline = !Property.IsA<FTransformProperty>() && !Property.IsA<FStructProperty>() && AvailableWidth >= 260.0f && ImGui::CalcTextSize(DisplayName).x < LabelWidth;
 
 		ImGui::AlignTextToFramePadding();
 		ImGui::TextWrapped("%s", DisplayName);
@@ -875,7 +1059,14 @@ namespace
 
 		ImGui::SetNextItemWidth(-1.0f);
 
-		if (DrawPropertyValue(Object, Property, ValuePtr, Label.c_str(), CustomFont))
+		return DrawPropertyValue(Object, Property, ValuePtr, Label.c_str(), CustomFont);
+	}
+
+	// UClass에 등록된 프로퍼티 한 줄. 구조체 멤버 하나가 바뀌어도 객체에는 바깥 프로퍼티(구조체)가 바뀌었다고 알린다.
+	// (UE는 FPropertyChangedEvent에 MemberProperty와 안쪽 Property를 따로 담는다)
+	void DrawProperty(UObject* Object, const FProperty& Property, ImFont* CustomFont)
+	{
+		if (DrawPropertyRow(Object, Object, Property, CustomFont))
 		{
 			Object->PostEditChangeProperty(Property);
 		}
@@ -1092,6 +1283,11 @@ void FDetailsPanel::OnRender()
 			ImGui::PushID(TargetComponent);
 			ImGui::SeparatorText("Component Properties");
 			DrawProperties(TargetComponent, CustomFont);
+			if (auto* Component = Cast<USkinnedMeshComponent>(TargetComponent))
+			{
+				ImGui::TextUnformatted("Skeletal Mesh");
+				DrawSkeletalMeshSlot(Component);
+			}
 			DrawShadowPreview();
 
 			if (SelectCandidateComponent != TargetComponent)

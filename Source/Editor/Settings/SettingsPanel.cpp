@@ -1,5 +1,6 @@
 #include "EnginePCH.h"
 #include "Editor/Settings/SettingsPanel.h"
+#include "Asset/AssetManager.h"
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 
@@ -46,6 +47,21 @@ void FSettingsPanel::OnRender()
 	ImGui::Checkbox("Cache Shadows", &Settings.bCacheShadows);
 	ImGui::Checkbox("Draw Bounding Box", &Settings.bDrawBoundingBox);
 	ImGui::Checkbox("Show Object UUID", &Settings.bShowUUID);
+	ImGui::Checkbox("Draw Decals", &Settings.bDrawDecals);
+	const char* DecalBroadPhases[] = { "Off", "Linear AABB", "BVH" };
+	int DecalBroadPhaseIndex = Settings.bDecalBVHCulling ? 2 : (Settings.bDecalCulling ? 1 : 0);
+	ImGui::SetNextItemWidth(200.0f);
+	if (ImGui::Combo("Decal Broad Phase", &DecalBroadPhaseIndex,
+		DecalBroadPhases, IM_ARRAYSIZE(DecalBroadPhases)))
+	{
+		Settings.bDecalCulling = DecalBroadPhaseIndex != 0;
+		Settings.bDecalBVHCulling = DecalBroadPhaseIndex == 2;
+	}
+	ImGui::Checkbox("Decal Narrow Phase (SAT)", &Settings.bDecalNarrowCulling);
+	ImGui::Indent();
+	ImGui::Checkbox("Use OBBTree", &Settings.bDecalOBBTree);
+	ImGui::Unindent();
+
 	const char* RenderingPaths[] = { "Forward", "Deferred" };
 	int RenderingPathIndex = static_cast<int>(Settings.RenderingPath);
 	ImGui::SetNextItemWidth(200.0f);
@@ -57,7 +73,7 @@ void FSettingsPanel::OnRender()
 	ImGui::SetNextItemWidth(200.0f);
 	if (ImGui::Combo("Lighting Model", &LightingModelIndex, LightingModels, IM_ARRAYSIZE(LightingModels)))
 		Settings.LightingModel = static_cast<ELightingModel>(LightingModelIndex);
-	const char* LightCullingModes[] = { "Off", "Tiled", "Clustered" };
+	const char* LightCullingModes[] = { "Off", "Tiled", "Clustered", "Tiled 2.5D" };
 	int LightCullingModeIndex = static_cast<int>(Settings.LightCullingMode);
 	ImGui::SetNextItemWidth(200.0f);
 	if (ImGui::Combo("Light Culling", &LightCullingModeIndex,
@@ -95,6 +111,7 @@ void FSettingsPanel::OnRender()
 	ImGui::EndDisabled();
 	ImGui::Checkbox("Vignette", &Settings.bShowVignette);
 	ImGui::Checkbox("Camera Fade / Letterbox", &Settings.bShowCameraOverlay);
+	ImGui::Checkbox("Skeletal Mesh", &Settings.bShowSkeletalMesh);
 
 	if (ImGui::TreeNode("Camera Overlay Debug"))
 	{
@@ -188,6 +205,11 @@ bool FSettingsPanel::SaveSettings() const
 	File << "PcfMode=" << static_cast<uint32_t>(Settings.PcfMode) << "\n";
 	File << "DrawBoundingBox=" << Settings.bDrawBoundingBox << "\n";
 	File << "ShowUUID=" << Settings.bShowUUID << "\n";
+	File << "DrawDecals=" << Settings.bDrawDecals << "\n";
+	File << "DecalCulling=" << Settings.bDecalCulling << "\n";
+	File << "DecalNarrowCulling=" << Settings.bDecalNarrowCulling << "\n";
+	File << "DecalBVHCulling=" << Settings.bDecalBVHCulling << "\n";
+	File << "DecalOBBTree=" << Settings.bDecalOBBTree << "\n";
 	File << "DrawBatchLine=" << Settings.bDrawBatchLine << "\n";
 	File << "DrawCascadeBounds=" << Settings.bDrawCascadeBounds << "\n";
 	File << "DrawPSGrid=" << Settings.bDrawPSGrid << "\n";
@@ -198,8 +220,9 @@ bool FSettingsPanel::SaveSettings() const
 	File << "DisplayGamma=" << Settings.DisplayGamma << "\n";
 	File << "ShowVignette=" << Settings.bShowVignette << "\n";
 	File << "ShowCameraOverlay=" << Settings.bShowCameraOverlay << "\n";
+	File << "ShowSkeletalMesh=" << Settings.bShowSkeletalMesh << "\n";
 
-	File << "LightCullingMode=" << (Settings.LightCullingMode == ELightCullingMode::Off ? "Off" : Settings.LightCullingMode == ELightCullingMode::Tiled ? "Tiled" : "Clustered") << "\n";
+	File << "LightCullingMode=" << (Settings.LightCullingMode == ELightCullingMode::Off ? "Off" : Settings.LightCullingMode == ELightCullingMode::Tiled ? "Tiled" : Settings.LightCullingMode == ELightCullingMode::Tiled25D ? "Tiled25D" : "Clustered") << "\n";
 	File << "RenderingPath=" << (Settings.RenderingPath == ERenderingPath::Forward ? "Forward" : "Deferred") << "\n";
 	File << "LightingModel=" << (Settings.LightingModel == ELightingModel::Gouraud ? "Gouraud" :
 		Settings.LightingModel == ELightingModel::Lambert ? "Lambert" :
@@ -338,6 +361,11 @@ bool FSettingsPanel::LoadSettings()
 				}
 				else if (Key == "DrawBoundingBox") Settings.bDrawBoundingBox = std::stoi(ValueStr);
 				else if (Key == "ShowUUID") Settings.bShowUUID = std::stoi(ValueStr);
+				else if (Key == "DrawDecals") Settings.bDrawDecals = std::stoi(ValueStr);
+				else if (Key == "DecalCulling") Settings.bDecalCulling = std::stoi(ValueStr);
+				else if (Key == "DecalNarrowCulling") Settings.bDecalNarrowCulling = std::stoi(ValueStr);
+				else if (Key == "DecalBVHCulling") Settings.bDecalBVHCulling = std::stoi(ValueStr);
+				else if (Key == "DecalOBBTree") Settings.bDecalOBBTree = std::stoi(ValueStr);
 				else if (Key == "DrawBatchLine") Settings.bDrawBatchLine = std::stoi(ValueStr);
 				else if (Key == "DrawCascadeBounds") Settings.bDrawCascadeBounds = std::stoi(ValueStr);
 				else if (Key == "DrawPSGrid") Settings.bDrawPSGrid = std::stoi(ValueStr);
@@ -348,12 +376,14 @@ bool FSettingsPanel::LoadSettings()
 				else if (Key == "DisplayGamma")      Settings.DisplayGamma = std::stof(ValueStr);
 				else if (Key == "ShowVignette")      Settings.bShowVignette = std::stoi(ValueStr);
 				else if (Key == "ShowCameraOverlay") Settings.bShowCameraOverlay = std::stoi(ValueStr);
+				else if (Key == "ShowSkeletalMesh")  Settings.bShowSkeletalMesh = std::stoi(ValueStr);
 
 				else if (Key == "LightCullingMode")
 				{
 					if (ValueStr == "Off") Settings.LightCullingMode = ELightCullingMode::Off;
 					else if (ValueStr == "Tiled") Settings.LightCullingMode = ELightCullingMode::Tiled;
 					else if (ValueStr == "Clustered") Settings.LightCullingMode = ELightCullingMode::Clustered;
+					else if (ValueStr == "Tiled25D") Settings.LightCullingMode = ELightCullingMode::Tiled25D;
 				}
 				else if (Key == "EnableTiledLightCulling" || Key == "EnableClusteredLightCulling")
 				{
@@ -528,6 +558,22 @@ void FSettingsPanel::DrawDefaultPawnSettings()
                 }
                 if (bSelected) ImGui::SetItemDefaultFocus();
                 if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", Mesh->GetPath().c_str());
+                ImGui::PopID();
+            }
+
+            // 아직 로드되지 않은 메시는 경로만 보여 주고 고를 때 로드한다
+            for (const FString& ItemPath : UAssetManager::GetUnloadedAssetPaths(EAssetType::StaticMesh))
+            {
+                ImGui::PushID(ItemPath.c_str());
+                if (ImGui::Selectable(fs::path(ItemPath).stem().string().c_str(), false))
+                {
+                    if (UStaticMesh* Mesh = UAssetManager::GetAssetByPath<UStaticMesh>(ItemPath))
+                    {
+                        SelectedMesh = Mesh;
+                        bChanged = true;
+                    }
+                }
+                if (ImGui::IsItemHovered()) ImGui::SetTooltip("%s", ItemPath.c_str());
                 ImGui::PopID();
             }
             ImGui::EndCombo();

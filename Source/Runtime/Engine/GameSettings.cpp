@@ -37,6 +37,7 @@ namespace
 		if (Name == "Off") return ELightCullingMode::Off;
 		if (Name == "Tiled") return ELightCullingMode::Tiled;
 		if (Name == "Clustered") return ELightCullingMode::Clustered;
+		if (Name == "Tiled25D") return ELightCullingMode::Tiled25D;
 		return Fallback;
 	}
 }
@@ -75,6 +76,7 @@ FGameSettings FGameSettings::Load(const FString& Path)
 	Options.bGammaCorrection = Config.GetBool("Rendering", "GammaCorrection", Options.bGammaCorrection);
 	Options.bShowVignette = Config.GetBool("Rendering", "ShowVignette", Options.bShowVignette);
 	Options.bShowCameraOverlay = Config.GetBool("Rendering", "ShowCameraOverlay", Options.bShowCameraOverlay);
+	Options.bShowSkeletalMesh = Config.GetBool("Rendering", "ShowSkeletalMesh", Options.bShowSkeletalMesh);
 	if (const FString Gamma = Config.GetString("Rendering", "DisplayGamma", ""); !Gamma.empty())
 	{
 		try { Options.DisplayGamma = FMath::Clamp(std::stof(Gamma), 1.0f, 3.0f); } catch (...) {}

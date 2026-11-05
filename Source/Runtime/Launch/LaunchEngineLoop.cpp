@@ -2,6 +2,7 @@
 #include "Launch/LaunchEngineLoop.h"
 
 #include "Asset/AssetManager.h"
+#include "Asset/AssetLoadProfiler.h"
 #include "Core/EngineTimer.h"
 #include "Core/Window.h"
 #include "Core/Windows/WindowsPlatformTime.h"
@@ -17,6 +18,7 @@
 #include "Core/SplashScreen.h"
 #include "Core/Stats/LightweightStats.h"
 #include "Core/Async/TaskPool.h"
+#include "Tasks/Tasks.h"
 
 #include "UObject/UObjectGlobals.h"
 
@@ -41,6 +43,7 @@ FEngineLoop::~FEngineLoop() = default;
 
 bool FEngineLoop::PreInit(HINSTANCE hInstance, UClass* EngineClass)
 {
+	FLoadStageTimer StartupTimer{ "Phase/Total" };
 	SetProcessDpiAwarenessContext(DPI_AWARENESS_CONTEXT_PER_MONITOR_AWARE_V2);
 	if (!EngineClass || !EngineClass->IsChildOf(UEngine::StaticClass()))
 	{
@@ -63,6 +66,7 @@ bool FEngineLoop::PreInit(HINSTANCE hInstance, UClass* EngineClass)
 	FSplashScreen::SetText(L"Initializing Renderer...");
 	FSplashScreen::SetProgress(0.1f);
 
+	FLoadStageTimer RendererTimer{ "Phase/Device+Renderer+Window" };
 	// 0이면 주 모니터 해상도
 	const uint32 Width = Config.Width != 0 ? Config.Width : static_cast<uint32>(GetSystemMetrics(SM_CXSCREEN));
 	const uint32 Height = Config.Height != 0 ? Config.Height : static_cast<uint32>(GetSystemMetrics(SM_CYSCREEN));
@@ -86,26 +90,41 @@ bool FEngineLoop::PreInit(HINSTANCE hInstance, UClass* EngineClass)
 		CreateDepthBuffer(MainWindow->GetWidth(), MainWindow->GetHeight());
 	}
 
+	RendererTimer.Stop();
+
 	FSplashScreen::SetText(L"Loading Assets...");
-	FRenderResourceManager::Init();
+	{
+		FLoadStageTimer Timer{ "Phase/RenderResourceManager::Init" };
+		FRenderResourceManager::Init();
+	}
 
 	constexpr float AssetStart = 0.1f;
 	constexpr float AssetEnd = 0.8f;
-	UAssetManager::Init([](int32 Loaded, int32 Total, const FString& Path)
-		{
-			FSplashScreen::SetText("Loading " + Path);
-			FSplashScreen::SetProgress(AssetStart + (AssetEnd - AssetStart) * Loaded / Total);
-		});
+	{
+		FLoadStageTimer Timer{ "Phase/AssetManager::Init" };
+		UAssetManager::Init([](int32 Loaded, int32 Total, const FString& Path)
+			{
+				FSplashScreen::SetText("Loading " + Path);
+				FSplashScreen::SetProgress(AssetStart + (AssetEnd - AssetStart) * Loaded / Total);
+			});
+	}
 
-	Renderer->InitScenePasses(Config.SkyPanorama ? Config.SkyPanorama : "");
+	{
+		FLoadStageTimer Timer{ "Phase/InitScenePasses" };
+		Renderer->InitScenePasses(Config.SkyPanorama ? Config.SkyPanorama : "");
+	}
 
 	FSplashScreen::SetText(L"Initializing Engine...");
 	FSplashScreen::SetProgress(0.8f);
+	FLoadStageTimer EngineInitTimer{ "Phase/GEngine::Init" };
 	if (!GEngine->Init())
 	{
 		FSplashScreen::Hide();
 		return false;
 	}
+	EngineInitTimer.Stop();
+	StartupTimer.Stop();
+	FAssetLoadProfiler::WriteReport();
 
 	FSplashScreen::SetProgress(1.0f);
 	FSplashScreen::Hide();
@@ -167,11 +186,13 @@ bool FEngineLoop::Tick()
 void FEngineLoop::Exit()
 {
 	FTaskPool::Get().Shutdown();
-
+	Tasks::FTaskScheduler::Get().Shutdown();
 
 	if (GEngine)
 	{
 		GEngine->PreExit();
+		GEngine->ShutdownAudioDevice();   // 믹서 스레드를 먼저 멈춘 뒤 USoundWave를 지운다
+		
 	}
 
 	// UAssetManager도 UObject이므로 일괄 삭제 전에 종료한다.

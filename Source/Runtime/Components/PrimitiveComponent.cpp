@@ -72,6 +72,11 @@ bool UPrimitiveComponent::LineTraceComponent(const FRay& WorldRay, FHitResult& O
 	return Mesh && TraceMesh(WorldRay, *Mesh, GetWorldMatrix(), OutHit);
 }
 
+FPrimitiveSceneProxy* UPrimitiveComponent::CreateSceneProxy()
+{
+	return new FPrimitiveSceneProxy(this);
+}
+
 void UPrimitiveComponent::MarkRenderStateDirty()
 {
 	if (SceneProxy)
@@ -98,7 +103,8 @@ bool UPrimitiveComponent::MoveComponent(const FVector& Delta, const FRotator& Ne
 void UPrimitiveComponent::PostEditChangeProperty(const FProperty& Property)
 {
 	if (Property.Name == "bCastShadow" ||
-		Property.Name == "bReceiveShadow")
+		Property.Name == "bReceiveShadow" || 
+		Property.Name == "bReceivesDecals")
 	{
 		MarkRenderStateDirty();
 	}

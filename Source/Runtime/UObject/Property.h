@@ -13,6 +13,7 @@
 #include "Serialization/TypeSerializer.h"
 
 class UObject;
+class UScriptStruct;
 
 // 프로퍼티 지정자 (UE: ObjectMacros.h의 EPropertyFlags)
 enum EPropertyFlags : uint32
@@ -54,6 +55,9 @@ public:
 
     bool HasAnyFlags(uint32 InFlags) const { return (PropertyFlags & InFlags) != 0; }
 
+    // 파일로 저장하거나 복제할 때(Persistent) Transient는 건너뛴다 (UE: FProperty::ShouldSerializeValue)
+    bool ShouldSerializeValue(const FArchive& Ar) const { return !(HasAnyFlags(CPF_Transient) && Ar.IsPersistent()); }
+
     // 객체 주소 → 이 멤버의 주소 (UE: FProperty::ContainerPtrToValuePtr)
     template <typename ValueType = void>
     ValueType* ContainerPtrToValuePtr(void* Container) const
@@ -66,12 +70,8 @@ public:
         return reinterpret_cast<const ValueType*>(static_cast<const uint8*>(Container) + Offset);
     }
 
-    // 씬 json 저장·불러오기 (UE에서는 텍스트 형식인 ExportText_Internal / ImportText_Internal 자리)
-    // Value는 객체가 아니라 멤버의 주소다.
-    virtual void ExportJson(json& Out, const void* Value) const = 0;
-    virtual void ImportJson(const json& In, void* Value) const = 0;
-
     // FStructuredArchive 저장·불러오기 (UE: FProperty::SerializeItem)
+    // Value는 객체가 아니라 멤버의 주소다.
     virtual void SerializeItem(FStructuredArchive::FSlot Slot, void* Value) const = 0;
 };
 
@@ -104,13 +104,11 @@ public:
     }
 };
 
-// json 변환과 << 연산자가 있는 타입은 저장 코드를 새로 쓸 필요가 없다 (UE: TProperty_WithEqualityAndSerializer)
+// << 연산자가 있는 타입은 저장 코드를 새로 쓸 필요가 없다 (UE: TProperty_WithEqualityAndSerializer)
 template <typename InTCppType, class TInPropertyBaseClass>
 class TProperty_WithSerializer : public TProperty<InTCppType, TInPropertyBaseClass>
 {
 public:
-    void ExportJson(json& Out, const void* Value) const override { Out = this->GetPropertyValue(Value); }
-    void ImportJson(const json& In, void* Value) const override { this->GetPropertyValue(Value) = In.template get<InTCppType>(); }
     void SerializeItem(FStructuredArchive::FSlot Slot, void* Value) const override { Slot << this->GetPropertyValue(Value); }
 };
 
@@ -172,7 +170,7 @@ class FTransformProperty : public FTransformProperty_Super
     DECLARE_FIELD(FTransformProperty, FTransformProperty_Super)
 };
 
-// 아래는 json 형식이 C++ 타입 그대로가 아니라서 Property.cpp에서 직접 구현한다.
+// 아래는 저장 형식이 C++ 타입 그대로가 아니라서 Property.cpp에서 직접 구현한다.
 
 // FColor(4바이트)는 RGBA를 묶은 uint32로 저장한다
 using FColorProperty_Super = TProperty<FColor, FProperty>;
@@ -181,8 +179,6 @@ class FColorProperty : public FColorProperty_Super
     DECLARE_FIELD(FColorProperty, FColorProperty_Super)
 
 public:
-    void ExportJson(json& Out, const void* Value) const override;
-    void ImportJson(const json& In, void* Value) const override;
     void SerializeItem(FStructuredArchive::FSlot Slot, void* Value) const override;
 };
 
@@ -193,8 +189,6 @@ class FLinearColorProperty : public FLinearColorProperty_Super
     DECLARE_FIELD(FLinearColorProperty, FLinearColorProperty_Super)
 
 public:
-    void ExportJson(json& Out, const void* Value) const override;
-    void ImportJson(const json& In, void* Value) const override;
     void SerializeItem(FStructuredArchive::FSlot Slot, void* Value) const override;
 };
 
@@ -207,8 +201,6 @@ class FObjectProperty : public FObjectProperty_Super
 public:
     UClass* PropertyClass = nullptr; // 멤버 선언의 클래스 (UMaterial* 이면 UMaterial)
 
-    void ExportJson(json& Out, const void* Value) const override;
-    void ImportJson(const json& In, void* Value) const override;
     void SerializeItem(FStructuredArchive::FSlot Slot, void* Value) const override;
 };
 
@@ -224,8 +216,18 @@ public:
     int64 GetValue(const void* Value) const { return ReadEnumValue(Value, ElementSize); }
     void SetValue(void* Value, int64 NewValue) const { WriteEnumValue(Value, ElementSize, NewValue); }
 
-    void ExportJson(json& Out, const void* Value) const override;
-    void ImportJson(const json& In, void* Value) const override;
+    void SerializeItem(FStructuredArchive::FSlot Slot, void* Value) const override;
+};
+
+// USTRUCT()를 붙인 구조체 멤버 (UE: UnrealType.h의 FStructProperty)
+// 안쪽 프로퍼티는 Struct가 가지고 있다. 저장은 Struct에게 맡기고, 컨테이너로 객체 대신 이 멤버의 주소를 넘긴다.
+class FStructProperty : public FProperty
+{
+    DECLARE_FIELD(FStructProperty, FProperty)
+
+public:
+    UScriptStruct* Struct = nullptr;
+
     void SerializeItem(FStructuredArchive::FSlot Slot, void* Value) const override;
 };
 
@@ -266,6 +268,14 @@ template <typename T>
 struct TPropertyTypeFor<T*>
 {
     using Type = FObjectProperty;
+};
+
+// USTRUCT의 GENERATED_BODY()가 StaticStruct()를 만든다. FVector처럼 위 표에 직접 적은 타입은 그쪽이 먼저 걸린다.
+template <typename T>
+    requires requires { { T::StaticStruct() } -> std::same_as<UScriptStruct*>; }
+struct TPropertyTypeFor<T>
+{
+    using Type = FStructProperty;
 };
 
 // meta를 쓸 수 있는 타입. HHT가 만든 static_assert가 이걸로 검사한다.

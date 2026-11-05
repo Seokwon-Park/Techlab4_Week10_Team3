@@ -35,12 +35,16 @@ struct FMeshDrawBatch
 		uint32 IndexCount = 0;
 		const void* ObjectKey = nullptr;
 		bool bOccludedByGpu = false;
+		bool bReceivesDecals = true;
+		FAABB Bounds{};
+		const FPrimitiveSceneProxy* Proxy = nullptr;
 	};
 
 	FPipelineState Pipeline;
 
 	FVertexBuffer* VertexBuffer = nullptr;
 	FIndexBuffer* IndexBuffer = nullptr;
+	const FStructuredBuffer* BoneBuffer = nullptr;
 
 	TArray<FTextureBinding> Textures;
 	ESamplerState Sampler = ESamplerState::LinearClamp;

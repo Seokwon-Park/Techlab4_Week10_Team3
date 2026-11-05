@@ -11,6 +11,10 @@
 #include "Components/SlidingMovementComponent.h"
 #include "Audio/AudioDevice.h"
 #include "Components/AudioComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/Actor/SkeletalMeshActor.h"
+
+#include "Tasks/Tasks.h"
 
 #include "Serialization/JsonArchive.h"
 
@@ -18,6 +22,8 @@ UEngine* GEngine = nullptr;
 
 bool UEngine::Init()
 {
+	Tasks::FTaskScheduler::Get().Initialize();
+
 	// Keep reflected shape classes linked even when no actor references them yet.
 	// Add Component and scene loading both discover these classes by registration.
 	UBoxComponent::StaticClass();
@@ -25,6 +31,8 @@ bool UEngine::Init()
 	UCapsuleComponent::StaticClass();
 	UIceVolumeComponent::StaticClass();
 	USlidingMovementComponent::StaticClass();
+	USkeletalMeshComponent::StaticClass();
+	ASkeletalMeshActor::StaticClass();
 	UAudioComponent::StaticClass();   // Add Component 목록에 뜨도록 (다른 컴포넌트와 동일)
 
 
@@ -126,7 +134,11 @@ void UEngine::DestroyWorldContext(UWorld* InWorld)
 			}
 			WorldContextlist[idx].SetCurrentWorld(nullptr);
 			WorldContextlist.RemoveAt(idx);
-			if (ContextType == EWorldType::PIE || ContextType == EWorldType::Game)
+			if (
+				ContextType == EWorldType::PIE ||
+				ContextType == EWorldType::Game ||
+				ContextType == EWorldType::EditorPreview
+			)
 			{
 				if (MainAudioDevice) MainAudioDevice->Flush(InWorld);
 				DestroyWorld(InWorld);

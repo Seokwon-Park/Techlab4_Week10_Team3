@@ -25,6 +25,11 @@ public:
 	void AddOrientedBox(const FBox& LocalBox, const FMatrix& WorldMatrix, const FVector4& Color);
 	void AddPath(const TArray<FVector>& Points, const FVector4& Color);
 
+	// 밑면 중심에서 꼭짓점으로 향하는 사각뿔의 모서리를 그립니다.
+	void AddPyramid(const FVector& BaseCenter, const FVector& Tip, float HalfWidth, const FVector4& Color);
+	// 서로 직교하는 세 원으로 와이어 구를 그립니다.
+	void AddSphere(const FVector& Center, float Radius, const FVector4& Color, int32 Segments = 16);
+
 	void Flush();
 	void OnRender(const FMatrix& ViewProjection);
 

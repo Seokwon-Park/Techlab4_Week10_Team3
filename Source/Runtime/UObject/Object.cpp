@@ -28,9 +28,9 @@ UObject::~UObject()
 {
 	if (bIsRegistered)
 	{
-		if (ClassPrivate)
+		if (GetClass())
 		{
-			UnhashObject(this, ClassPrivate);
+			UnhashObject(this, GetClass());
 		}
 		int32 LastIndex = GUObjectArray.Num() - 1;
 		if (InternalIndex != LastIndex)
@@ -51,7 +51,7 @@ UClass* UObject::StaticClass()
 	{
 		c.Name = "Object";
 		c.Super = nullptr;
-		c.ClassSize = sizeof(UObject);
+		c.Size = sizeof(UObject);
 		c.Constructor = [](void* Memory) -> UObject*
 			{
 				return ::new (Memory) UObject();
@@ -65,28 +65,6 @@ bool UObject::IsA(const UClass* Class) const
 {
 	const UClass* ThisClass = GetClass();
 	return ThisClass && ThisClass->IsChildOf(Class);
-}
-
-void UObject::Serialize(json& Handle, bool bIsLoading)
-{
-	// 타입별 처리는 각 FProperty 서브클래스가 한다 (Property.h)
-	for (UClass* c = GetClass(); c; c = c->Super)
-	{
-		for (const FProperty* Property : c->GetProperties())
-		{
-			if (Property->HasAnyFlags(CPF_Transient))
-				continue;
-
-			if (bIsLoading && !Handle.contains(Property->Name))
-				continue;
-
-			void* Value = Property->ContainerPtrToValuePtr(this);
-			if (bIsLoading)
-				Property->ImportJson(Handle[Property->Name], Value);
-			else
-				Property->ExportJson(Handle[Property->Name], Value);
-		}
-	}
 }
 
 void UObject::Serialize(FArchive& Ar)
@@ -104,18 +82,7 @@ void UObject::Serialize(FStructuredArchive::FRecord Record)
 
 void UObject::SerializeScriptProperties(FStructuredArchive::FSlot Slot)
 {
-	FStructuredArchive::FRecord Properties = Slot.EnterRecord();
-
-	for (UClass* c = GetClass(); c; c = c->Super)
-	{
-		for (const FProperty* Property : c->GetProperties())
-		{
-			TOptional<FStructuredArchive::FSlot> Slot = Properties.TryEnterField(Property->Name.c_str(), true);
-			if (!Slot.IsSet()) continue;
-
-			Property->SerializeItem(Slot.GetValue(), Property->ContainerPtrToValuePtr(this));
-		}
-	}
+	GetClass()->SerializeTaggedProperties(Slot, this);
 }
 
 

@@ -8,7 +8,6 @@
 #include "UI/WidgetSerializer.h"
 #include "UObject/UObjectHash.h"
 
-#include <fstream>
 
 void FUIEditorPanel::OnRender()
 {
@@ -383,14 +382,25 @@ void FUIEditorPanel::DeleteSelected()
 
 FString FUIEditorPanel::Snapshot() const
 {
-	return FWidgetSerializer::SaveWidget(Root).dump();
+	// 되돌리기는 위젯 트리만 다룬다. 부모 클래스·미리보기 크기는 기본값으로 둔다
+	FWidgetAssetData Asset;
+	Asset.Root = Root;
+	TArray<uint8> Bytes;
+	FWidgetSerializer::SaveAssetToBytes(Asset, Bytes);
+	return FString(Bytes.begin(), Bytes.end());
 }
 
 void FUIEditorPanel::RestoreSnapshot(const FString& Data)
 {
 	const FString SelectedName = Selected ? Selected->WidgetName : FString();
 	delete Root;
-	Root = Cast<UPanelWidget>(FWidgetSerializer::LoadWidget(json::parse(Data)));
+	TArray<uint8> Bytes;
+	Bytes.SetNum(static_cast<int32>(Data.size()));
+	std::memcpy(Bytes.GetData(), Data.data(), Data.size());
+
+	FWidgetAssetData Asset;
+	FWidgetSerializer::LoadAssetFromBytes(Bytes, Asset);
+	Root = Asset.Root;
 	Selected = Root ? (Root->WidgetName == SelectedName ? Root : Root->FindWidget(SelectedName)) : nullptr;
 	DragMode = EDragMode::None;
 }
@@ -462,21 +472,21 @@ void FUIEditorPanel::NewAsset(const FString& Path)
 
 void FUIEditorPanel::OpenAsset(const FString& Path)
 {
-	std::ifstream In(Path);
-	json File = In ? json::parse(In, nullptr, false) : json();
-	if (File.is_discarded() || !File.contains("Root"))
+	TArray<uint8> Bytes;
+	FWidgetAssetData Asset;
+	if (!FWidgetSerializer::ReadFileBytes(Path, Bytes) || !FWidgetSerializer::LoadAssetFromBytes(Bytes, Asset) || !Asset.Root)
 	{
 		HTR_LOG(Error, "Cannot open widget asset: {}", Path);
+		delete Asset.Root;
 		return;
 	}
 
 	delete Root;
-	Root = Cast<UPanelWidget>(FWidgetSerializer::LoadWidget(File["Root"]));
+	Root = Asset.Root;
 	Selected = nullptr;
 	AssetPath = Path;
-	ParentClassName = File.value("ParentClass", std::string("UUserWidget"));
-	if (File.contains("DesignSize"))
-		PreviewSize = FVector2(File["DesignSize"][0].get<float>(), File["DesignSize"][1].get<float>());
+	ParentClassName = Asset.ParentClass;
+	PreviewSize = Asset.DesignSize;
 
 	UndoStack.Reset();
 	RedoStack.Reset();
@@ -489,14 +499,15 @@ void FUIEditorPanel::Save()
 {
 	if (!Root || AssetPath.empty()) return;
 
-	json File;
-	File["Version"] = 1;
-	File["ParentClass"] = ParentClassName;
-	File["DesignSize"] = { 1920, 1080 };   // 레이아웃 기준은 항상 1080 높이
-	File["Root"] = FWidgetSerializer::SaveWidget(Root);
-
-	std::ofstream Out(AssetPath);
-	Out << File.dump(2);
+	FWidgetAssetData Asset;
+	Asset.ParentClass = ParentClassName;
+	Asset.DesignSize = FVector2(1920.0f, 1080.0f);   // 레이아웃 기준은 항상 1080 높이
+	Asset.Root = Root;
+	if (!FWidgetSerializer::SaveAsset(Asset, AssetPath))
+	{
+		HTR_LOG(Error, "Cannot save widget asset: {}", AssetPath);
+		return;
+	}
 
 	FWidgetAssetCache::Invalidate(AssetPath);   // 다음 CreateWidget이 새 파일을 읽는다
 	bDirty = false;

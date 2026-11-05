@@ -62,10 +62,12 @@ struct FFunctionInfo
 	std::vector<std::string> Flags;   // FUNC_CallInEditor 등
 };
 
+// UCLASS 클래스 또는 USTRUCT 구조체. 둘 다 "프로퍼티 목록을 가진 타입"이라 같은 구조를 쓴다 (UE: UStruct)
 struct FClassInfo
 {
+	bool bIsStruct = false;           // USTRUCT
 	std::string Name;
-	std::string SuperName;
+	std::string SuperName;            // USTRUCT는 부모가 없으면 빈 문자열
 	int Line = 0;
 	int GeneratedBodyLine = 0;
 	std::vector<FPropertyInfo> Properties;
@@ -95,7 +97,7 @@ struct FHeaderInfo
 	std::vector<FClassInfo> Classes;
 	std::vector<FEnumInfo> Enums;
 
-	// UCLASS / UENUM 중 파일에서 처음 나오는 줄. .generated.h는 이보다 앞에 include해야 한다.
+	// UCLASS / USTRUCT / UENUM 중 파일에서 처음 나오는 줄. .generated.h는 이보다 앞에 include해야 한다.
 	int GetFirstDeclarationLine() const
 	{
 		int Line = 0;
